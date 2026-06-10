@@ -58,7 +58,6 @@ dist-ssr/
 # Build artifacts / generated data
 backend/__pycache__/
 backend/backend/__pycache__/
-backend/curriculos/
 
 # Docker / local runtime
 *.pid
