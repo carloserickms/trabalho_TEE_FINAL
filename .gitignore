@@ -1,0 +1,67 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment files
+.env
+.env.*
+*.local
+backend/.env
+backend/.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+backend/venv/
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+.output/
+.vinxi/
+.tanstack/
+.nitro/
+
+# Cloudflare / Wrangler
+.wrangler/
+.dev.vars
+
+# Build artifacts / generated data
+backend/__pycache__/
+backend/backend/__pycache__/
+backend/curriculos/
+
+# Docker / local runtime
+*.pid
+*.seed
+docker-compose.override.yml
+
