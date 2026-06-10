@@ -2,6 +2,8 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
 
+const PROD_BACKEND_ORIGIN = "https://trabalho-tee-final.onrender.com";
+
 const BACKEND_ORIGIN = (() => {
   const viteApiUrl = import.meta.env.VITE_API_URL as string | undefined;
   if (viteApiUrl && viteApiUrl.trim()) return viteApiUrl.replace(/\/$/, "");
@@ -10,7 +12,7 @@ const BACKEND_ORIGIN = (() => {
     return process.env.API_URL.replace(/\/$/, "");
   }
 
-  return "http://localhost:8000";
+  return import.meta.env.PROD ? PROD_BACKEND_ORIGIN : "http://localhost:8000";
 })();
 
 const proxyMiddleware = createMiddleware().server(async ({ next, request }) => {
@@ -32,7 +34,14 @@ const proxyMiddleware = createMiddleware().server(async ({ next, request }) => {
   target.hostname = backend.hostname;
   target.port = backend.port;
 
-  return fetch(new Request(target, request));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    return await fetch(new Request(target, request), { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 });
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {

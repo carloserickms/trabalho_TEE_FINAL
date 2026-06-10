@@ -1,13 +1,15 @@
 import startServer from "../dist/server/server.js";
 
 function toAbsoluteUrl(request) {
+  const requestUrl = request?.url;
+  if (typeof requestUrl !== "string" || requestUrl.length === 0) {
+    return new URL("http://localhost/");
+  }
+
   try {
-    return new URL(request.url);
+    return new URL(requestUrl);
   } catch {
-    const headers = request.headers;
-    const proto = headers.get("x-forwarded-proto") ?? "https";
-    const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? "localhost:3000";
-    return new URL(request.url, `${proto}://${host}`);
+    return new URL(requestUrl, "http://localhost/");
   }
 }
 
