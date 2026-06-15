@@ -20,7 +20,7 @@ export function SearchInput({
 
   const sugg = useMemo(() => {
     const base = [
-      "competências em recuperação de informação no Nordeste",
+      "competências em recuperação de informação no Nordeste.",
       "pesquisadores e produções em ciência de dados",
       "ontologias em ciência da informação",
       "PLN para o português brasileiro em domínios acadêmicos",
