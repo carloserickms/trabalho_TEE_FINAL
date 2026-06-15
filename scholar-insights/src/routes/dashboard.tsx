@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
@@ -90,6 +91,8 @@ function DashboardPage() {
   };
   const search = Route.useSearch() as DashboardSearch;
   const navigate = useNavigate({ from: "/dashboard" });
+  const [draftStart, setDraftStart] = useState(search.yearStart ?? "");
+  const [draftEnd, setDraftEnd] = useState(search.yearEnd ?? "");
   const filters = activeFilters(search);
   const query = analyticsQuery(filters);
   const apiBase = !import.meta.env.PROD ? "http://localhost:8000" : "";
@@ -142,14 +145,18 @@ function DashboardPage() {
 
         <FilterPanel title="Filtros Lattes">
           <input
-            value={search.yearStart}
-            onChange={(event) => updateSearch({ yearStart: event.target.value })}
+            value={draftStart}
+            onChange={(e) => setDraftStart(e.target.value)}
+            onBlur={() => updateSearch({ yearStart: draftStart })}
+            onKeyDown={(e) => e.key === "Enter" && updateSearch({ yearStart: draftStart })}
             placeholder={String(overview?.filters.minYear ?? "Ano inicial")}
             className="rounded-sm border bg-surface px-3 py-2 text-[13px]"
           />
           <input
-            value={search.yearEnd}
-            onChange={(event) => updateSearch({ yearEnd: event.target.value })}
+            value={draftEnd}
+            onChange={(e) => setDraftEnd(e.target.value)}
+            onBlur={() => updateSearch({ yearEnd: draftEnd })}
+            onKeyDown={(e) => e.key === "Enter" && updateSearch({ yearEnd: draftEnd })}
             placeholder={String(overview?.filters.maxYear ?? "Ano final")}
             className="rounded-sm border bg-surface px-3 py-2 text-[13px]"
           />
