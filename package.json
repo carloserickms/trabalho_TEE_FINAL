@@ -1,0 +1,8 @@
+{
+  "name": "trabalho-tee-final",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix scholar-insights ci && npm --prefix scholar-insights run build"
+  }
+}
