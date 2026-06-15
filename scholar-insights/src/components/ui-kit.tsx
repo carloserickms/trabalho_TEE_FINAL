@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 
 export function SearchInput({
   defaultValue = "",
@@ -12,6 +12,11 @@ export function SearchInput({
 }) {
   const [v, setV] = useState(defaultValue);
   const [focus, setFocus] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setV(defaultValue);
+  }, [defaultValue]);
 
   const sugg = useMemo(() => {
     const base = [
@@ -39,7 +44,11 @@ export function SearchInput({
           );
           params.set("q", v);
           params.delete("mode");
-          window.location.href = `/buscar?${params.toString()}`;
+          params.set("page", "0");
+          navigate({
+            to: "/buscar",
+            search: Object.fromEntries(params.entries()) as never,
+          });
         }}
         className={`flex ${tall} items-center gap-3 rounded-md border bg-surface px-4 shadow-[0_1px_0_rgba(0,0,0,0.02)] focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/5`}
       >

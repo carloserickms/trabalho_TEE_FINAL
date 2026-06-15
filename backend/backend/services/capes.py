@@ -15,6 +15,8 @@ CAPES_API_BASE_URL = os.getenv(
 ).rstrip("/")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("CAPES_API_TIMEOUT", "15"))
 MAX_RETRIES = int(os.getenv("CAPES_API_RETRIES", "2"))
+COUNT_PAGE_SIZE = int(os.getenv("CAPES_COUNT_PAGE_SIZE", "100"))
+COUNT_MAX_PAGES = int(os.getenv("CAPES_COUNT_MAX_PAGES", "3"))
 
 FILTER_FACETS = {
     "year": "ano-base",
@@ -126,7 +128,37 @@ def search_productions(
         "size": size,
         "hasMore": len(results) >= size,
         "source": "capes",
+        "total": _payload_total(payload, len(results)),
     }
+
+
+def count_productions(
+    *,
+    search: str = "",
+    filters: dict[str, str | list[str] | None] | None = None,
+) -> tuple[int, bool]:
+    if not search.strip() and not any(value for value in (filters or {}).values()):
+        return 0, False
+
+    total = 0
+    reached_limit = False
+    query = build_query(filters or {})
+    for page in range(COUNT_MAX_PAGES):
+        params: dict[str, Any] = {"page": page, "size": COUNT_PAGE_SIZE}
+        if search.strip():
+            params["search"] = search.strip()
+        if query:
+            params["query"] = query
+
+        payload = _request_json("/data/catalogo/producao", params)
+        content = payload.get("content", []) if isinstance(payload, dict) else []
+        page_count = len(content) if isinstance(content, list) else 0
+        total += page_count
+        reached_limit = page == COUNT_MAX_PAGES - 1 and page_count == COUNT_PAGE_SIZE
+        if page_count < COUNT_PAGE_SIZE:
+            break
+
+    return total, reached_limit
 
 
 def list_facets() -> list[dict[str, Any]]:
@@ -184,7 +216,33 @@ def _serialize_facet_value(item: dict[str, Any]) -> dict[str, Any]:
     key = item.get("key")
     value = item.get("value")
     label = str(value if value is not None else key if key is not None else "").strip()
-    return {"key": str(key).strip() if key is not None else label, "label": label}
+    count = (
+        item.get("count")
+        or item.get("total")
+        or item.get("doc_count")
+        or item.get("quantidade")
+        or item.get("valueCount")
+    )
+    output = {"key": str(key).strip() if key is not None else label, "label": label}
+    if isinstance(count, int):
+        output["count"] = count
+    return output
+
+
+def _payload_total(payload: Any, fallback: int) -> int:
+    if not isinstance(payload, dict):
+        return fallback
+    for key in ("totalElements", "total", "totalItems", "total_items", "count"):
+        value = payload.get(key)
+        if isinstance(value, int):
+            return value
+    page = payload.get("page")
+    if isinstance(page, dict):
+        for key in ("totalElements", "total", "totalItems"):
+            value = page.get(key)
+            if isinstance(value, int):
+                return value
+    return fallback
 
 
 def _serialize_production(item: dict[str, Any], search: str) -> dict[str, Any]:
@@ -223,6 +281,7 @@ def _serialize_production(item: dict[str, Any], search: str) -> dict[str, Any]:
         "abstract": _summary(item),
         "highlights": highlights,
         "pesquisadorId": "",
+        "source": "capes",
     }
 
 

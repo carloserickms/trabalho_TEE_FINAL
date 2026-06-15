@@ -5,7 +5,6 @@ const nav = [
   { to: "/buscar", label: "Buscar" },
   { to: "/pesquisadores", label: "Pesquisadores" },
   { to: "/dashboard", label: "Analytics" },
-  { to: "/assistente", label: "Assistente" },
   { to: "/api-docs", label: "API" },
 ] as const;
 
@@ -86,7 +85,6 @@ export function AppFooter() {
               { label: "Busca", to: "/buscar" },
               { label: "Pesquisadores", to: "/pesquisadores" },
               { label: "Analytics", to: "/dashboard" },
-              { label: "Assistente", to: "/assistente" },
             ],
           },
           {

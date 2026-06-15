@@ -22,16 +22,37 @@ class SearchRequest(BaseModel):
 
 @router.get("/api/producoes/busca")
 def api_search_get(
-    q: str = Query("", min_length=1),
+    q: str = Query(""),
     mode: SearchMode = Query("hybrid"),
     limit: int = Query(20, ge=1, le=100),
+    year: str | None = Query(default=None),
+    institution: str | None = Query(default=None),
+    subtype: str | None = Query(default=None),
+    largeArea: str | None = Query(default=None),
+    area: str | None = Query(default=None),
 ):
-    return search_productions(q, limit=limit, mode=mode)
+    return search_productions(
+        q,
+        limit=limit,
+        mode=mode,
+        filters={
+            "year": year,
+            "institution": institution,
+            "subtype": subtype,
+            "largeArea": largeArea,
+            "area": area,
+        },
+    )
 
 
 @router.post("/v1/search")
 def api_search_post(payload: SearchRequest = Body(...)):
-    results = search_productions(payload.query, limit=payload.limit, mode=payload.mode)
+    results = search_productions(
+        payload.query,
+        limit=payload.limit,
+        mode=payload.mode,
+        filters=payload.filters,
+    )
     return {
         "took_ms": 0,
         "total": len(results),

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import get_cors_origins
 from backend.routers.analytics import router as analytics_router
 from backend.routers.capes import router as capes_router
+from backend.routers.combined import router as combined_router
 from backend.routers.embeddings import router as embeddings_router
 from backend.routers.health import router as health_router
 from backend.routers.imports import router as imports_router
@@ -27,5 +28,6 @@ app.include_router(researchers_router)
 app.include_router(search_router)
 app.include_router(analytics_router)
 app.include_router(capes_router)
+app.include_router(combined_router)
 app.include_router(embeddings_router)
 

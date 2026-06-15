@@ -2,7 +2,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { PageShell } from "@/components/app-shell";
 import { Tag, SectionHeader } from "@/components/ui-kit";
 import { getResearcherById, type APIResearcher } from "@/lib/api";
-import { ProductionBars, CollaborationGraph } from "@/components/charts";
+import { ProductionBars } from "@/components/charts";
 import { Breadcrumbs } from "./buscar";
 
 export const Route = createFileRoute("/pesquisadores/$id")({
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/pesquisadores/$id")({
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: `${loaderData?.r.name} — Scientia Discovery` },
+      { title: `${loaderData?.r.name} - Scientia Discovery` },
       { name: "description", content: loaderData?.r.bio ?? "Perfil do pesquisador." },
     ],
   }),
@@ -39,6 +39,21 @@ export const Route = createFileRoute("/pesquisadores/$id")({
 
 function ResearcherProfile() {
   const { r } = Route.useLoaderData() as { r: APIResearcher };
+  const productionYears = r.production
+    .map((item) => item.year)
+    .filter((year): year is number => Number.isFinite(year));
+  const productionPeriod =
+    productionYears.length > 0
+      ? `${Math.min(...productionYears)}-${Math.max(...productionYears)}`
+      : "";
+  const areas = uniqueValues([r.area, ...r.subareas]);
+  const stats = [
+    { label: "Produções", value: String(r.publications) },
+    productionPeriod ? { label: "Período", value: productionPeriod } : null,
+    r.collaborators.length > 0
+      ? { label: "Colaboradores", value: String(r.collaborators.length) }
+      : null,
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
 
   return (
     <PageShell>
@@ -51,68 +66,51 @@ function ResearcherProfile() {
               { label: r.name },
             ]}
           />
-          <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr_auto]">
+          <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr]">
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/8 font-serif text-[28px] text-primary">
-              {r.name
-                .split(" ")
-                .map((p: string) => p[0])
-                .slice(0, 2)
-                .join("")}
+              {initials(r.name)}
             </div>
             <div className="min-w-0">
               <h1 className="font-serif text-[34px] leading-tight tracking-tight text-foreground">
                 {r.name}
               </h1>
-              <div className="mt-1 text-[14px] text-muted-foreground">{r.title}</div>
+              {r.title && <div className="mt-1 text-[14px] text-muted-foreground">{r.title}</div>}
               <div className="mt-0.5 text-[14px] text-muted-foreground">
                 {r.institution}
                 {r.unit ? ` · ${r.unit}` : ""}
               </div>
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {r.subareas.map((s: string) => (
-                  <Tag key={s} tone="scholar">
-                    {s}
-                  </Tag>
-                ))}
-              </div>
+              {areas.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {areas.map((area) => (
+                    <Tag key={area} tone="scholar">
+                      {area}
+                    </Tag>
+                  ))}
+                </div>
+              )}
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11.5px] text-muted-foreground">
-                <span>
-                  ORCID <span className="text-foreground">{r.orcid || "—"}</span>
-                </span>
+                {r.orcid && (
+                  <span>
+                    ORCID <span className="text-foreground">{r.orcid}</span>
+                  </span>
+                )}
                 <span>
                   Lattes <span className="text-foreground">{r.lattes}</span>
                 </span>
               </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Link
-                to="/assistente"
-                search={{ rid: r.id } as never}
-                className="rounded-sm bg-primary px-4 py-2 text-center text-[13px] font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Conversar com o assistente sobre este pesquisador
-              </Link>
-              <button className="rounded-sm border bg-surface px-4 py-2 text-[13px] text-foreground hover:bg-muted">
-                Exportar perfil (PDF)
-              </button>
             </div>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-[1280px] px-6 py-10">
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border md:grid-cols-4">
-          {[
-            { l: "h-index", v: String(r.hIndex || "—") },
-            { l: "Produções", v: String(r.publications) },
-            { l: "Citações", v: r.citations ? r.citations.toLocaleString("pt-BR") : "—" },
-            { l: "Colaboradores", v: String(r.collaborators.length || "—") },
-          ].map((s) => (
-            <div key={s.l} className="bg-surface p-5">
+        <div className="grid grid-cols-1 gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-2 md:grid-cols-3">
+          {stats.map((stat) => (
+            <div key={stat.label} className="bg-surface p-5">
               <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">
-                {s.l}
+                {stat.label}
               </div>
-              <div className="mt-1 font-serif text-[26px] text-foreground">{s.v}</div>
+              <div className="mt-1 font-serif text-[26px] text-foreground">{stat.value}</div>
             </div>
           ))}
         </div>
@@ -128,23 +126,23 @@ function ResearcherProfile() {
           </div>
 
           <div>
-            <SectionHeader eyebrow="Produção recente" title="Artigos e capítulos" />
+            <SectionHeader eyebrow="Produção recente" title="Produções registradas" />
             <ul className="mt-5 divide-y hairline rounded-md border bg-surface">
               {r.recent.length > 0 ? (
-                r.recent.map((p) => (
-                  <li key={p.doi || p.title} className="p-5">
+                r.recent.map((production) => (
+                  <li key={production.doi || production.title} className="p-5">
                     <div className="flex items-center gap-2 text-[11.5px] uppercase tracking-[0.12em] text-muted-foreground">
-                      <span>{p.venue}</span>
-                      <span>·</span>
-                      <span>{p.year}</span>
-                      {p.qualis && <Tag tone="scholar">Qualis {p.qualis}</Tag>}
+                      {production.venue && <span>{production.venue}</span>}
+                      {production.venue && production.year > 0 && <span>·</span>}
+                      {production.year > 0 && <span>{production.year}</span>}
+                      {production.qualis && <Tag tone="scholar">Qualis {production.qualis}</Tag>}
                     </div>
                     <div className="mt-1 font-serif text-[16.5px] leading-snug text-foreground">
-                      {p.title}
+                      {production.title}
                     </div>
-                    {p.doi && (
+                    {production.doi && (
                       <div className="mt-1.5 font-mono text-[11.5px] text-muted-foreground">
-                        DOI: {p.doi}
+                        DOI: {production.doi}
                       </div>
                     )}
                   </li>
@@ -163,7 +161,7 @@ function ResearcherProfile() {
               {r.production.length > 0 ? (
                 <ProductionBars data={r.production} height={130} />
               ) : (
-                <div className="text-[13.5px] text-muted-foreground py-8 text-center">
+                <div className="py-8 text-center text-[13.5px] text-muted-foreground">
                   Dados de produção não disponíveis.
                 </div>
               )}
@@ -174,42 +172,60 @@ function ResearcherProfile() {
         <aside className="space-y-8">
           <div>
             <SectionHeader eyebrow="Rede" title="Colaboração científica" />
-            <div className="mt-5">
-              <CollaborationGraph />
-            </div>
             <ul className="mt-4 divide-y hairline overflow-hidden rounded-md border bg-surface text-[13px]">
               {r.collaborators.length > 0 ? (
-                r.collaborators.map((c) => (
-                  <li key={c.name} className="flex items-center justify-between px-4 py-2.5">
+                r.collaborators.map((collaborator) => (
+                  <li
+                    key={collaborator.name}
+                    className="flex items-center justify-between gap-4 px-4 py-2.5"
+                  >
                     <div>
-                      <div className="text-foreground">{c.name}</div>
-                      <div className="text-[11.5px] text-muted-foreground">{c.institution}</div>
+                      <div className="text-foreground">{collaborator.name}</div>
+                      {collaborator.institution && (
+                        <div className="text-[11.5px] text-muted-foreground">
+                          {collaborator.institution}
+                        </div>
+                      )}
                     </div>
                     <span className="font-mono text-[11px] text-muted-foreground">
-                      {c.shared} co-autorias
+                      {collaborator.shared} coautorias
                     </span>
                   </li>
                 ))
               ) : (
                 <li className="px-4 py-2.5 text-[12px] text-muted-foreground">
-                  Nenhum colaborador encontrado.
+                  Nenhuma coautoria encontrada entre os pesquisadores carregados.
                 </li>
               )}
             </ul>
           </div>
 
-          <div className="rounded-md border bg-surface p-5">
-            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Competências
+          {areas.length > 0 && (
+            <div className="rounded-md border bg-surface p-5">
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Áreas informadas
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {areas.map((area) => (
+                  <Tag key={area}>{area}</Tag>
+                ))}
+              </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {["Pesquisa acadêmica", "Produção científica", "Plataforma Lattes"].map((s) => (
-                <Tag key={s}>{s}</Tag>
-              ))}
-            </div>
-          </div>
+          )}
         </aside>
       </section>
     </PageShell>
   );
+}
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("");
+}
+
+function uniqueValues(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }

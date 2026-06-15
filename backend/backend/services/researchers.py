@@ -212,37 +212,94 @@ def get_researcher(lattes_id: str) -> dict[str, Any] | None:
     )
 
 
-def search_productions(query: str, limit: int = 20, mode: str = "hybrid") -> list[dict[str, Any]]:
+def _filter_clauses(filters: dict[str, Any] | None) -> tuple[list[str], list[Any]]:
+    if not filters:
+        return [], []
+
+    clauses: list[str] = []
+    params: list[Any] = []
+    filter_map = {
+        "year": ("p.ano = %s", lambda value: int(value)),
+        "institution": ("pes.instituicao = %s", str),
+        "largeArea": ("pes.grande_area = %s", str),
+        "area": ("pes.area_conhecimento = %s", str),
+        "subtype": ("p.tipo = %s", lambda value: str(value).upper()),
+    }
+
+    for key, value in filters.items():
+        if value in (None, "") or key not in filter_map:
+            continue
+        clause, converter = filter_map[key]
+        try:
+            params.append(converter(value))
+        except (TypeError, ValueError):
+            continue
+        clauses.append(clause)
+
+    return clauses, params
+
+
+def _search_clauses(query: str, filters: dict[str, Any] | None) -> tuple[list[str], list[Any]]:
     q = query.strip()
-    if not q:
-        return []
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    if q:
+        clauses.append(
+            """
+            (
+                p.fts_vector @@ plainto_tsquery('portuguese', %s)
+                OR p.titulo ILIKE %s
+                OR p.titulo_ingles ILIKE %s
+                OR p.palavras_chave ILIKE %s
+                OR p.periodico ILIKE %s
+                OR p.evento ILIKE %s
+                OR pes.nome_completo ILIKE %s
+            )
+            """
+        )
+        params.extend([q, f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"])
+
+    filter_clauses, filter_params = _filter_clauses(filters)
+    clauses.extend(filter_clauses)
+    params.extend(filter_params)
+    return clauses, params
+
+
+def search_productions(
+    query: str,
+    limit: int = 20,
+    mode: str = "hybrid",
+    filters: dict[str, Any] | None = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    q = query.strip()
+    where_clauses, params = _search_clauses(q, filters)
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    fulltext_sql = "ts_rank(p.fts_vector, plainto_tsquery('portuguese', %s))"
+    select_score = fulltext_sql if q else "0"
+    score_params = [q] if q else []
 
     results = query_rows(
-        """
+        f"""
         SELECT
             p.*,
             pes.nome_completo AS autor_nome,
             pes.id_lattes,
-            ts_rank(
-                p.fts_vector,
-                plainto_tsquery('portuguese', %s)
-            ) AS fulltext_score
+            {select_score} AS fulltext_score
         FROM producao p
         JOIN pesquisador pes ON p.id_pesquisador = pes.id_pesquisador
-        WHERE p.fts_vector @@ plainto_tsquery('portuguese', %s)
-           OR p.titulo ILIKE %s
-           OR p.titulo_ingles ILIKE %s
-           OR p.palavras_chave ILIKE %s
-           OR p.periodico ILIKE %s
-           OR p.evento ILIKE %s
-        LIMIT %s
+        {where_sql}
+        ORDER BY p.ano DESC NULLS LAST, p.titulo ASC
+        LIMIT %s OFFSET %s
         """,
-        (q, q, f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", max(limit * 4, limit)),
+        tuple(score_params + params + [max(limit * 4, limit) if q else limit, offset]),
     )
 
     for row in results:
         fulltext_score = float(row.get("fulltext_score") or 0)
-        semantic_score = _semantic_score(q, row)
+        semantic_score = _semantic_score(q, row) if q else 0
         if mode == "fulltext":
             score = fulltext_score
         elif mode == "semantic":
@@ -262,8 +319,25 @@ def search_productions(query: str, limit: int = 20, mode: str = "hybrid") -> lis
 
     serialized = []
     for row in results[:limit]:
-        serialized.append(serialize_search_result(row))
+        item = serialize_search_result(row)
+        item["source"] = "lattes"
+        serialized.append(item)
     return serialized
+
+
+def count_productions(query: str = "", filters: dict[str, Any] | None = None) -> int:
+    where_clauses, params = _search_clauses(query, filters)
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    row = query_one(
+        f"""
+        SELECT COUNT(*) AS count
+        FROM producao p
+        JOIN pesquisador pes ON p.id_pesquisador = pes.id_pesquisador
+        {where_sql}
+        """,
+        tuple(params),
+    )
+    return int(row["count"] if row else 0)
 
 
 def list_institutions() -> list[str]:
@@ -276,4 +350,131 @@ def list_institutions() -> list[str]:
         """
     )
     return [row["instituicao"] for row in rows]
+
+
+def list_local_facets() -> list[dict[str, Any]]:
+    def display_label(value: Any) -> str:
+        text = str(value or "").replace("_", " ").strip()
+        return text.title() if text.isupper() or "_" in text else text
+
+    facet_queries = {
+        "year": """
+            SELECT ano::text AS key, ano::text AS label, COUNT(*) AS count
+            FROM producao
+            WHERE ano IS NOT NULL
+            GROUP BY ano
+            ORDER BY ano DESC
+        """,
+        "institution": """
+            SELECT instituicao AS key, instituicao AS label, COUNT(*) AS count
+            FROM pesquisador
+            WHERE instituicao IS NOT NULL AND instituicao != ''
+            GROUP BY instituicao
+            ORDER BY instituicao
+        """,
+        "largeArea": """
+            SELECT grande_area AS key, grande_area AS label, COUNT(*) AS count
+            FROM pesquisador
+            WHERE grande_area IS NOT NULL AND grande_area != ''
+            GROUP BY grande_area
+            ORDER BY grande_area
+        """,
+        "area": """
+            SELECT area_conhecimento AS key, area_conhecimento AS label, COUNT(*) AS count
+            FROM pesquisador
+            WHERE area_conhecimento IS NOT NULL AND area_conhecimento != ''
+            GROUP BY area_conhecimento
+            ORDER BY area_conhecimento
+        """,
+        "subtype": """
+            SELECT tipo AS key, tipo AS label, COUNT(*) AS count
+            FROM producao
+            WHERE tipo IS NOT NULL AND tipo != ''
+            GROUP BY tipo
+            ORDER BY tipo
+        """,
+    }
+    labels = {
+        "year": "Ano",
+        "institution": "Instituição",
+        "largeArea": "Grande área",
+        "area": "Área de conhecimento",
+        "subtype": "Tipo de produção",
+    }
+    output = []
+    for facet_id, sql in facet_queries.items():
+        values = [
+            {
+                "key": str(row["key"]),
+                "label": display_label(row["label"]),
+                "count": int(row["count"]),
+                "source": "lattes",
+            }
+            for row in query_rows(sql)
+            if row.get("key")
+        ]
+        output.append(
+            {
+                "id": facet_id,
+                "key": facet_id,
+                "label": labels[facet_id],
+                "values": values,
+            }
+        )
+    return output
+
+
+def list_local_facets_for_search(
+    query: str = "",
+    filters: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    def display_label(value: Any) -> str:
+        text = str(value or "").replace("_", " ").strip()
+        return text.title() if text.isupper() or "_" in text else text
+
+    facet_fields = {
+        "year": ("p.ano::text", "p.ano::text", "Ano"),
+        "institution": ("pes.instituicao", "pes.instituicao", "Instituição"),
+        "largeArea": ("pes.grande_area", "pes.grande_area", "Grande área"),
+        "area": ("pes.area_conhecimento", "pes.area_conhecimento", "Área de conhecimento"),
+        "subtype": ("p.tipo", "p.tipo", "Tipo de produção"),
+    }
+
+    output = []
+    for facet_id, (key_sql, label_sql, label) in facet_fields.items():
+        scoped_filters = {k: v for k, v in (filters or {}).items() if k != facet_id}
+        where_clauses, params = _search_clauses(query, scoped_filters)
+        where_clauses.append(f"{key_sql} IS NOT NULL")
+        where_clauses.append(f"{key_sql} != ''")
+        where_sql = f"WHERE {' AND '.join(where_clauses)}"
+        rows = query_rows(
+            f"""
+            SELECT {key_sql} AS key, {label_sql} AS label, COUNT(*) AS count
+            FROM producao p
+            JOIN pesquisador pes ON p.id_pesquisador = pes.id_pesquisador
+            {where_sql}
+            GROUP BY 1, 2
+            ORDER BY count DESC, label ASC
+            LIMIT 80
+            """,
+            tuple(params),
+        )
+        output.append(
+            {
+                "id": facet_id,
+                "key": facet_id,
+                "label": label,
+                "values": [
+                    {
+                        "key": str(row["key"]),
+                        "label": display_label(row["label"]),
+                        "count": int(row["count"]),
+                        "source": "lattes",
+                    }
+                    for row in rows
+                    if row.get("key")
+                ],
+            }
+        )
+    return output
 

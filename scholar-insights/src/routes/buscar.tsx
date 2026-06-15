@@ -6,8 +6,8 @@ import { z } from "zod";
 import { PageShell } from "@/components/app-shell";
 import { SearchInput, Tag } from "@/components/ui-kit";
 import {
-  getCapesFacets,
-  searchCapesProductions,
+  getCombinedFacets,
+  searchCombinedProductions,
   type CapesFacet,
   type SearchResult,
 } from "@/lib/api";
@@ -35,38 +35,48 @@ export const Route = createFileRoute("/buscar")({
   validateSearch: zodValidator(searchSchema),
   loaderDeps: ({ search }) => search,
   loader: async ({ deps }) => {
-    try {
-      const filters = {
-        year: deps.year,
-        institution: deps.institution,
-        largeArea: deps.largeArea,
-        area: deps.area,
-        subtype: deps.subtype,
-      };
-      const [response, facets] = await Promise.all([
-        searchCapesProductions(deps.q, filters, deps.page, 20),
-        getCapesFacets(),
-      ]);
-      return {
-        results: response.results,
-        facets,
-        query: deps.q,
-        params: deps,
-        page: response.page,
-        hasMore: response.hasMore,
-        error: "",
-      };
-    } catch (error) {
-      return {
-        results: [] as SearchResult[],
-        facets: [] as CapesFacet[],
-        query: deps.q,
-        params: deps,
-        page: deps.page,
-        hasMore: false,
-        error: error instanceof Error ? error.message : "Falha ao consultar a API CAPES.",
-      };
-    }
+    const filters = {
+      year: deps.year,
+      institution: deps.institution,
+      largeArea: deps.largeArea,
+      area: deps.area,
+      subtype: deps.subtype,
+    };
+    const [responseResult, facetsResult] = await Promise.allSettled([
+      searchCombinedProductions(deps.q, filters, deps.page, 20),
+      getCombinedFacets(deps.q, filters),
+    ]);
+
+    const response =
+      responseResult.status === "fulfilled"
+        ? responseResult.value
+        : {
+            results: [] as SearchResult[],
+            page: deps.page,
+            hasMore: false,
+            sources: { lattes: 0, capes: 0, total: 0 },
+            warning: "",
+          };
+    const facets = facetsResult.status === "fulfilled" ? facetsResult.value : ([] as CapesFacet[]);
+    const errors = [responseResult, facetsResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) =>
+        result.status === "rejected" && result.reason instanceof Error
+          ? result.reason.message
+          : "Falha ao consultar os dados.",
+      );
+
+    return {
+      results: response.results,
+      facets,
+      query: deps.q,
+      params: deps,
+      page: response.page,
+      hasMore: response.hasMore,
+      sources: response.sources ?? { lattes: 0, capes: 0, total: 0 },
+      warning: response.warning ?? "",
+      error: errors.join(" "),
+    };
   },
   head: () => ({
     meta: [
@@ -81,13 +91,22 @@ export const Route = createFileRoute("/buscar")({
 });
 
 function SearchPage() {
-  const { results, facets, query, params, page, hasMore, error } = Route.useLoaderData() as {
+  const { results, facets, query, params, page, hasMore, sources, warning, error } =
+    Route.useLoaderData() as {
     results: SearchResult[];
     facets: CapesFacet[];
     query: string;
     params: SearchParams;
     page: number;
     hasMore: boolean;
+    sources: {
+      lattes: number;
+      capes: number;
+      total?: number;
+      capesLimited?: boolean;
+      totalLimited?: boolean;
+    };
+    warning: string;
     error: string;
   };
   const search = Route.useSearch() as SearchParams;
@@ -95,6 +114,7 @@ function SearchPage() {
   const [sort, setSort] = useState("relevance");
 
   const sortedResults = useMemo(() => sortResults(results, sort), [results, sort]);
+  const totalResults = sources.total ?? sources.lattes + sources.capes;
   const activeFilters = [
     ["year", "ano"],
     ["institution", "instituição"],
@@ -122,9 +142,17 @@ function SearchPage() {
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
-              <Tag tone="scholar">CAPES Sucupira</Tag>
+              <Tag tone="scholar">Lattes + CAPES</Tag>
               <span>
-                {results.length} resultados{query ? ` para "${query}"` : ""}
+                {formatCount(totalResults, sources.totalLimited)} artigos nas bases
+                {query ? ` para "${query}"` : ""}
+              </span>
+              <span>
+                {formatNumber(sources.lattes)} Lattes ·{" "}
+                {formatCount(sources.capes, sources.capesLimited)} CAPES
+              </span>
+              <span>
+                {formatNumber(results.length)} nesta página
               </span>
             </div>
             <label className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
@@ -149,6 +177,7 @@ function SearchPage() {
             label="Ano"
             value={params.year}
             facet={findFacet(facets, "year")}
+            showCounts={false}
             onChange={(value) => updateSearch({ year: value })}
           />
           <FacetSelect
@@ -181,6 +210,11 @@ function SearchPage() {
           {error && (
             <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">
               {error}
+            </div>
+          )}
+          {!error && warning && (
+            <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+              A base Lattes foi carregada, mas a consulta CAPES retornou aviso: {warning}
             </div>
           )}
 
@@ -216,6 +250,9 @@ function SearchPage() {
                     <span>{r.venue}</span>
                     <span>·</span>
                     <span>{r.year}</span>
+                    <Tag tone={r.source === "lattes" || r.source === "local" ? "scholar" : "muted"}>
+                      {r.source === "lattes" || r.source === "local" ? "Lattes" : "CAPES"}
+                    </Tag>
                     {r.qualis && <Tag tone="scholar">Qualis {r.qualis}</Tag>}
                   </div>
                   <div className="mt-1 block font-serif text-[20px] leading-snug tracking-tight text-foreground">
@@ -240,7 +277,7 @@ function SearchPage() {
               <li className="py-12 text-center text-[14px] text-muted-foreground">
                 {query || activeFilters.length > 0
                   ? "Nenhum resultado encontrado para esta busca."
-                  : "Faça uma busca ou selecione filtros para encontrar produções na CAPES."}
+                  : "Faça uma busca ou selecione filtros para encontrar produções no Lattes e na CAPES."}
               </li>
             )}
           </ul>
@@ -270,8 +307,8 @@ function SearchPage() {
               Fonte dos dados
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-foreground/85">
-              Esta busca consulta a API pública da Plataforma Sucupira/CAPES. Perfis completos de
-              pesquisadores continuam vindo da base local Lattes.
+              Esta busca junta produções extraídas dos XML Lattes com os registros retornados
+              pela API pública da Plataforma Sucupira/CAPES.
             </p>
           </div>
 
@@ -301,11 +338,13 @@ function FacetSelect({
   label,
   value,
   facet,
+  showCounts = true,
   onChange,
 }: {
   label: string;
   value: string;
   facet?: CapesFacet;
+  showCounts?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -321,12 +360,25 @@ function FacetSelect({
         <option value="">Todos</option>
         {(facet?.values ?? []).map((item) => (
           <option key={`${facet?.id}-${item.key}`} value={item.key}>
-            {item.label}
+            {formatFacetLabel(item, showCounts)}
           </option>
         ))}
       </select>
     </label>
   );
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString("pt-BR");
+}
+
+function formatCount(value: number, limited?: boolean): string {
+  return `${formatNumber(value)}${limited ? "+" : ""}`;
+}
+
+function formatFacetLabel(item: { label: string; count?: number }, showCounts: boolean): string {
+  if (!showCounts || typeof item.count !== "number") return item.label;
+  return `${item.label} (${formatNumber(item.count)})`;
 }
 
 function sortResults(results: SearchResult[], sort: string): SearchResult[] {

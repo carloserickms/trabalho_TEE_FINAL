@@ -15,6 +15,8 @@ const SERVER_API = (() => {
     return process.env.API_URL.replace(/\/$/, "");
   }
 
+  if (!import.meta.env.PROD && typeof window !== "undefined") return "";
+
   return import.meta.env.PROD ? PROD_API : "http://localhost:8000";
 })();
 
@@ -73,6 +75,7 @@ export interface SearchResult {
   abstract: string;
   highlights: string[];
   pesquisadorId: string;
+  source?: "lattes" | "capes" | "local";
 }
 
 export interface DashboardStats {
@@ -94,9 +97,64 @@ export interface AreaMetric {
   count: number;
 }
 
+export interface AnalyticsFilters {
+  yearStart?: string;
+  yearEnd?: string;
+  institution?: string;
+  area?: string;
+}
+
+export interface CapesAnalyticsFilters {
+  search?: string;
+  year?: string;
+  institution?: string;
+  area?: string;
+}
+
+export interface AnalyticsDatum {
+  label: string;
+  count: number;
+}
+
+export interface AnalyticsOverview {
+  filters: {
+    minYear: number | null;
+    maxYear: number | null;
+  };
+  summary: {
+    productions: number;
+    researchers: number;
+    institutions: number;
+    areas: number;
+    firstYear: number | null;
+    lastYear: number | null;
+  };
+  yearly: { year: number; count: number }[];
+  areas: AnalyticsDatum[];
+  institutions: AnalyticsDatum[];
+  types: AnalyticsDatum[];
+  ranking: RankingItem[];
+}
+
+export interface CapesAnalyticsOverview {
+  source: "capes";
+  warning: string;
+  summary: {
+    total: number;
+    sample: number;
+    limited: boolean;
+  };
+  yearly: AnalyticsDatum[];
+  institutions: AnalyticsDatum[];
+  types: AnalyticsDatum[];
+  results: SearchResult[];
+}
+
 export interface FacetOption {
   key: string;
   label: string;
+  count?: number;
+  source?: "lattes" | "capes" | "local";
 }
 
 export interface CapesFacet {
@@ -121,7 +179,15 @@ export interface CapesSearchResponse {
   page: number;
   size: number;
   hasMore: boolean;
-  source: "capes";
+  source: "capes" | "combined";
+  sources?: {
+    lattes: number;
+    capes: number;
+    total?: number;
+    capesLimited?: boolean;
+    totalLimited?: boolean;
+  };
+  warning?: string;
 }
 
 function toApiResearcher(researcher: (typeof localResearchers)[number]): APIResearcher {
@@ -283,6 +349,25 @@ function localApiGet<T>(path: string): Promise<T> {
       hasMore: false,
       source: "capes",
     };
+  } else if (pathname === "/api/facets/combinadas") {
+    value = localCombinedFacets();
+  } else if (pathname === "/api/producoes/combinada") {
+    const results = localSearchProductions(params.get("search") ?? params.get("q") ?? "").map(
+      (item) => ({ ...item, source: "local" as const }),
+    );
+    value = {
+      results,
+      page: Number(params.get("page") ?? 0),
+      size: Number(params.get("size") ?? 20),
+      hasMore: false,
+      source: "combined",
+      sources: { lattes: results.length, capes: 0, total: results.length },
+      warning: "",
+    };
+  } else if (pathname === "/api/analytics/overview") {
+    value = localAnalyticsOverview();
+  } else if (pathname === "/api/analytics/capes") {
+    value = localCapesAnalytics(params);
   } else {
     throw new Error(`Local API route not implemented: ${pathname}`);
   }
@@ -316,6 +401,119 @@ function localCapesFacets(): CapesFacet[] {
   ];
 }
 
+function localAnalyticsOverview(): AnalyticsOverview {
+  const researchers = localResearchers.map(toApiResearcher);
+  const totalProducoes = researchers.reduce((sum, r) => sum + r.publications, 0);
+  const institutions = new Set(researchers.map((r) => r.institution).filter(Boolean));
+  const areas = new Set(researchers.map((r) => r.area).filter(Boolean));
+  const yearly = aggregateProductionYears(researchers);
+  const anos = yearly.map((y) => y.year);
+  const minYear = anos.length > 0 ? Math.min(...anos) : null;
+  const maxYear = anos.length > 0 ? Math.max(...anos) : null;
+  const typeLabels = ["Artigo", "Trabalho em anais", "Capítulo de livro", "Tese", "Dissertação"];
+
+  return {
+    filters: { minYear, maxYear },
+    summary: {
+      productions: totalProducoes,
+      researchers: researchers.length,
+      institutions: institutions.size,
+      areas: areas.size,
+      firstYear: minYear,
+      lastYear: maxYear,
+    },
+    yearly,
+    areas: [...areas].map((label) => ({
+      label,
+      count: researchers.filter((r) => r.area === label).length,
+    })),
+    institutions: [...institutions].map((label) => ({
+      label,
+      count: researchers.filter((r) => r.institution === label).length,
+    })),
+    types: typeLabels.map((label, index) => ({
+      label,
+      count: Math.round(totalProducoes / typeLabels.length * (typeLabels.length - index)),
+    })),
+    ranking: researchers
+      .sort((a, b) => b.publications - a.publications)
+      .slice(0, 10)
+      .map((r) => ({ id: r.id, name: r.name, institution: r.institution, publications: r.publications })),
+  };
+}
+
+function localCapesAnalytics(params: URLSearchParams): CapesAnalyticsOverview {
+  return {
+    source: "capes",
+    warning: "",
+    summary: { total: 452, sample: 100, limited: false },
+    yearly: [
+      { label: "2024", count: 28 },
+      { label: "2023", count: 35 },
+      { label: "2022", count: 22 },
+      { label: "2021", count: 15 },
+    ],
+    institutions: [
+      { label: "UNEB", count: 12 },
+      { label: "UFBA", count: 10 },
+      { label: "USP", count: 8 },
+      { label: "UFRN", count: 6 },
+      { label: "UFPE", count: 5 },
+    ],
+    types: [
+      { label: "Artigo", count: 60 },
+      { label: "Trabalho em anais", count: 25 },
+      { label: "Capítulo de livro", count: 15 },
+    ],
+    results: localSampleResults.slice(0, 12).map((item) => ({ ...item, source: "capes" })),
+  };
+}
+
+function localCombinedFacets(): CapesFacet[] {
+  return [
+    {
+      id: "year",
+      key: "year",
+      label: "Ano",
+      values: ["2024", "2023", "2022", "2021", "2020"].map((year) => ({
+        key: year,
+        label: year,
+        source: "local",
+      })),
+    },
+    {
+      id: "institution",
+      key: "institution",
+      label: "Instituição",
+      values: localInstitutions.map((institution) => ({
+        key: institution,
+        label: institution,
+        source: "local",
+      })),
+    },
+    {
+      id: "largeArea",
+      key: "largeArea",
+      label: "Grande área",
+      values: localAreas.map((area) => ({
+        key: area.name.toUpperCase(),
+        label: area.name,
+        source: "local",
+      })),
+    },
+    {
+      id: "area",
+      key: "area",
+      label: "Área de conhecimento",
+      values: localAreas.map((area) => ({
+        key: area.name,
+        label: area.name,
+        source: "local",
+      })),
+    },
+  ];
+}
+
 export async function getAllResearchers(): Promise<APIResearcher[]> {
   return apiGet<APIResearcher[]>("/api/pesquisadores");
 }
@@ -342,14 +540,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   return apiGet<DashboardStats>("/api/dashboard/stats");
 }
 
-export async function getResearcherRanking(): Promise<RankingItem[]> {
-  return apiGet<RankingItem[]>("/api/dashboard/ranking");
-}
-
-export async function getQualisDistribution(): Promise<{ label: string; value: number }[]> {
-  return apiGet<{ label: string; value: number }[]>("/api/qualis-distribuicao");
-}
-
 export async function getInstituicoes(): Promise<string[]> {
   return apiGet<string[]>("/api/instituicoes");
 }
@@ -358,7 +548,29 @@ export async function getAreaDistribution(): Promise<AreaMetric[]> {
   return apiGet<AreaMetric[]>("/api/metrics/area");
 }
 
-export async function searchCapesProductions(
+export function analyticsQuery(filters: AnalyticsFilters = {}): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  return params.toString();
+}
+
+export async function getAnalyticsOverview(
+  filters: AnalyticsFilters = {},
+): Promise<AnalyticsOverview> {
+  const query = analyticsQuery(filters);
+  return apiGet<AnalyticsOverview>(`/api/analytics/overview${query ? `?${query}` : ""}`);
+}
+
+export async function getCapesAnalytics(
+  filters: CapesAnalyticsFilters = {},
+): Promise<CapesAnalyticsOverview> {
+  const query = analyticsQuery(filters);
+  return apiGet<CapesAnalyticsOverview>(`/api/analytics/capes${query ? `?${query}` : ""}`);
+}
+
+export async function searchCombinedProductions(
   search: string,
   filters: CapesSearchFilters = {},
   page = 0,
@@ -371,9 +583,18 @@ export async function searchCapesProductions(
   }
   params.set("page", String(page));
   params.set("size", String(size));
-  return apiGet<CapesSearchResponse>(`/api/capes/producoes?${params.toString()}`);
+  return apiGet<CapesSearchResponse>(`/api/producoes/combinada?${params.toString()}`);
 }
 
-export async function getCapesFacets(): Promise<CapesFacet[]> {
-  return apiGet<CapesFacet[]>("/api/capes/facets");
+export async function getCombinedFacets(
+  search = "",
+  filters: CapesSearchFilters = {},
+): Promise<CapesFacet[]> {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search.trim());
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  const query = params.toString();
+  return apiGet<CapesFacet[]>(`/api/facets/combinadas${query ? `?${query}` : ""}`);
 }

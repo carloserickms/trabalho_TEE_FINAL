@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query, Response
 
 from backend.services.analytics import (
+    analytics_overview,
+    analytics_powerbi_csv,
+    analytics_powerbi_rows,
     area_distribution,
+    capes_analytics,
     dashboard_stats,
     institution_distribution,
     qualis_distribution,
@@ -42,6 +46,77 @@ def api_area_distribution():
 @router.get("/v1/metrics/institution")
 def api_institution_distribution():
     return institution_distribution()
+
+
+@router.get("/api/analytics/overview")
+def api_analytics_overview(
+    yearStart: str | None = Query(default=None),
+    yearEnd: str | None = Query(default=None),
+    institution: str | None = Query(default=None),
+    area: str | None = Query(default=None),
+):
+    return analytics_overview(
+        {
+            "yearStart": yearStart,
+            "yearEnd": yearEnd,
+            "institution": institution,
+            "area": area,
+        }
+    )
+
+
+@router.get("/api/analytics/capes")
+def api_analytics_capes(
+    search: str = Query(""),
+    year: str | None = Query(default=None),
+    institution: str | None = Query(default=None),
+    area: str | None = Query(default=None),
+):
+    return capes_analytics(
+        search=search,
+        year=year,
+        institution=institution,
+        area=area,
+    )
+
+
+@router.get("/api/analytics/powerbi")
+def api_analytics_powerbi_json(
+    yearStart: str | None = Query(default=None),
+    yearEnd: str | None = Query(default=None),
+    institution: str | None = Query(default=None),
+    area: str | None = Query(default=None),
+):
+    return analytics_powerbi_rows(
+        {
+            "yearStart": yearStart,
+            "yearEnd": yearEnd,
+            "institution": institution,
+            "area": area,
+        }
+    )
+
+
+@router.get("/api/analytics/powerbi.csv")
+def api_analytics_powerbi_csv(
+    yearStart: str | None = Query(default=None),
+    yearEnd: str | None = Query(default=None),
+    institution: str | None = Query(default=None),
+    area: str | None = Query(default=None),
+):
+    content = analytics_powerbi_csv(
+        {
+            "yearStart": yearStart,
+            "yearEnd": yearEnd,
+            "institution": institution,
+            "area": area,
+        }
+    )
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="scientia-powerbi.csv"'},
+    )
 
 
 @router.get("/api/instituicoes")

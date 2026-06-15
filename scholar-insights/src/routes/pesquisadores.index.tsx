@@ -245,6 +245,14 @@ function FacetList({
 }
 
 function ResearcherItem({ researcher, compact }: { researcher: APIResearcher; compact: boolean }) {
+  const productionYears = researcher.production
+    .map((item) => item.year)
+    .filter((year): year is number => Number.isFinite(year));
+  const productionPeriod =
+    productionYears.length > 0
+      ? `${Math.min(...productionYears)}-${Math.max(...productionYears)}`
+      : "—";
+
   return (
     <li className="rounded-md border bg-surface p-5">
       <div className="flex items-start gap-4">
@@ -285,11 +293,8 @@ function ResearcherItem({ researcher, compact }: { researcher: APIResearcher; co
       )}
       <div className="mt-4 grid grid-cols-3 gap-3 border-t hairline pt-3 text-[12px]">
         <Stat label="Produções" value={String(researcher.publications)} />
-        <Stat label="h-index" value={String(researcher.hIndex || "—")} />
-        <Stat
-          label="Citações"
-          value={researcher.citations ? researcher.citations.toLocaleString("pt-BR") : "—"}
-        />
+        <Stat label="Área" value={researcher.area} />
+        <Stat label="Período" value={productionPeriod} />
       </div>
     </li>
   );
