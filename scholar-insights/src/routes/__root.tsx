@@ -75,31 +75,31 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Scientia Discovery — Busca científica e mapeamento de competências" },
+      { title: "Scientia Discovery — Busca CAPES e pesquisadores Lattes" },
       {
         name: "description",
         content:
-          "Plataforma acadêmica de busca semântica e mapeamento de competências científicas a partir da Plataforma Lattes.",
+          "Plataforma acadêmica para consultar produções CAPES, pesquisadores importados da base Lattes e indicadores locais.",
       },
       {
         property: "og:title",
-        content: "Scientia Discovery — Busca científica e mapeamento de competências",
+        content: "Scientia Discovery — Busca CAPES e pesquisadores Lattes",
       },
       {
         property: "og:description",
         content:
-          "Plataforma acadêmica de busca semântica e mapeamento de competências científicas a partir da Plataforma Lattes.",
+          "Plataforma acadêmica para consultar produções CAPES, pesquisadores importados da base Lattes e indicadores locais.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       {
         name: "twitter:title",
-        content: "Scientia Discovery — Busca científica e mapeamento de competências",
+        content: "Scientia Discovery — Busca CAPES e pesquisadores Lattes",
       },
       {
         name: "twitter:description",
         content:
-          "Plataforma acadêmica de busca semântica e mapeamento de competências científicas a partir da Plataforma Lattes.",
+          "Plataforma acadêmica para consultar produções CAPES, pesquisadores importados da base Lattes e indicadores locais.",
       },
       {
         property: "og:image",

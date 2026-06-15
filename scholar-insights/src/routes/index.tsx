@@ -39,7 +39,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Plataforma acadêmica de busca semântica e mapeamento de competências científicas a partir da Plataforma Lattes.",
+          "Plataforma acadêmica para consultar produções CAPES, pesquisadores importados da base Lattes e indicadores locais.",
       },
     ],
   }),
@@ -68,12 +68,12 @@ function HomePage() {
             Plataforma de descoberta científica
           </div>
           <h1 className="mt-5 max-w-3xl font-serif text-[44px] leading-[1.05] tracking-tight text-foreground md:text-[56px]">
-            Encontre pesquisadores, produções e competências científicas em toda a base Lattes.
+            Encontre pesquisadores locais e produções científicas na base pública da CAPES.
           </h1>
           <p className="mt-5 max-w-2xl text-[15.5px] leading-relaxed text-muted-foreground">
-            Scientia Discovery integra busca textual, recuperação semântica e indicadores
-            cienciométricos para mapear o conhecimento produzido em universidades brasileiras — com
-            a precisão exigida por programas de pós-graduação, gestores e pesquisadores.
+            Scientia Discovery combina a base local de pesquisadores Lattes com a API pública da
+            Plataforma Sucupira/CAPES para consulta textual, filtros por facetas e indicadores
+            cienciométricos.
           </p>
 
           <div className="mt-9 max-w-3xl">
@@ -126,25 +126,25 @@ function HomePage() {
       <section className="mx-auto max-w-[1280px] px-6 py-20">
         <SectionHeader
           eyebrow="Capacidades"
-          title="Três modalidades de busca, uma única interface."
-          description="Combine recuperação textual, semântica e exploratória para responder perguntas que vão desde citações específicas até a descoberta de competências emergentes em uma instituição."
+          title="Busca, filtros e indicadores em uma única interface."
+          description="Combine busca textual na CAPES, facetas oficiais da Plataforma Sucupira e dados locais de pesquisadores importados da base Lattes."
         />
         <div className="mt-10 grid gap-px overflow-hidden rounded-md border bg-border md:grid-cols-3">
           {[
             {
-              t: "Full-text",
-              d: "Indexação textual rigorosa sobre títulos, resumos e palavras-chave, com operadores booleanos, filtros por Qualis, DOI e ano, e ranqueamento BM25.",
-              note: "PostgreSQL · Elastic",
+              t: "Busca CAPES",
+              d: "Consulta textual diretamente na Plataforma Sucupira/CAPES com paginação e normalização dos resultados para a interface.",
+              note: "API CAPES",
             },
             {
-              t: "Semântica",
-              d: "Embeddings vetoriais geram similaridade conceitual entre consultas em linguagem natural e a produção científica, mesmo sem termos exatos.",
-              note: "pgvector · LangChain",
+              t: "Facetas oficiais",
+              d: "Filtros por ano, instituição, programa, subtipo e área usando as chaves e valores aceitos pela própria API CAPES.",
+              note: "query por facetas",
             },
             {
-              t: "Exploratória",
-              d: "Navegação assistida por sugestões contextuais, expansão de consulta e mapas temáticos para descobrir conexões entre áreas e pesquisadores.",
-              note: "Knowledge graph",
+              t: "Base local Lattes",
+              d: "Perfis de pesquisadores, séries históricas e rankings são calculados a partir do PostgreSQL local alimentado pelo importador Lattes.",
+              note: "FastAPI · PostgreSQL",
             },
           ].map((c) => (
             <div key={c.t} className="bg-surface p-7">
@@ -282,11 +282,11 @@ function HomePage() {
                 Para instituições
               </div>
               <h3 className="mt-3 font-serif text-[28px] leading-tight tracking-tight text-foreground">
-                Mapeamento institucional de competências científicas.
+                Consulta institucional de pesquisadores e produções científicas.
               </h3>
               <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-muted-foreground">
-                Conecte sua pró-reitoria de pós-graduação à plataforma e obtenha relatórios
-                customizados de produção, redes de colaboração e potencial de submissão a editais.
+                Use a base local de pesquisadores e os filtros oficiais da CAPES para acompanhar
+                produção, áreas e instituições em uma interface única.
               </p>
               <div className="mt-6 flex gap-3">
                 <Link
@@ -309,14 +309,14 @@ function HomePage() {
               </div>
               <ul className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-[13px]">
                 {[
-                  "Plataforma Lattes",
-                  "ORCID",
-                  "DSpace / repositórios",
-                  "Apache Hop (ETL)",
-                  "PostgreSQL + pgvector",
-                  "Power BI",
+                  "Plataforma Sucupira/CAPES",
+                  "Currículos Lattes locais",
                   "FastAPI",
-                  "LangChain",
+                  "PostgreSQL",
+                  "React Router",
+                  "Vite",
+                  "Facetas CAPES",
+                  "Importação protegida",
                 ].map((i) => (
                   <li key={i} className="flex items-center gap-2 text-foreground/85">
                     <span className="h-1 w-1 rounded-full bg-foreground/60" />

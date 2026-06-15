@@ -8,7 +8,7 @@ export const Route = createFileRoute("/configuracoes")({
       { title: "Configurações — Scientia Discovery" },
       {
         name: "description",
-        content: "Configurações de conta, preferências de busca e integrações.",
+        content: "Configurações da aplicação, fontes de dados e importação.",
       },
     ],
   }),
@@ -20,34 +20,27 @@ function SettingsPage() {
     <PageShell>
       <section className="mx-auto grid max-w-[1280px] grid-cols-1 gap-10 px-6 py-12 lg:grid-cols-[240px_1fr]">
         <aside className="space-y-2 text-[13px]">
-          {[
-            "Conta",
-            "Preferências de busca",
-            "Notificações",
-            "Integrações",
-            "Equipe institucional",
-            "Faturamento",
-          ].map((s, i) => (
-            <a
-              key={s}
-              href="#"
-              className={`block rounded-sm px-3 py-2 ${i === 0 ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          {["Fontes", "Busca", "Importação", "Segurança"].map((item, index) => (
+            <button
+              key={item}
+              type="button"
+              className={`block w-full rounded-sm px-3 py-2 text-left ${index === 0 ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {s}
-            </a>
+              {item}
+            </button>
           ))}
         </aside>
 
         <div className="space-y-10">
           <div>
-            <SectionHeader eyebrow="Conta" title="Perfil institucional" />
+            <SectionHeader eyebrow="Aplicação" title="Fontes de dados configuradas" />
             <div className="mt-6 grid gap-5 rounded-md border bg-surface p-6 md:grid-cols-2">
-              <Field label="Nome completo" value="Ana Lúcia Cardoso" />
-              <Field label="E-mail institucional" value="ana.cardoso@uneb.br" />
-              <Field label="ORCID" value="0000-0002-5841-3320" />
-              <Field label="Lattes" value="lattes.cnpq.br/3920481726354019" />
-              <Field label="Instituição" value="Universidade do Estado da Bahia" />
-              <Field label="Programa" value="PPGCOMP — Ciência da Computação" />
+              <Field label="Backend local" value="http://localhost:8000" />
+              <Field label="API CAPES" value="https://apigw-proxy.capes.gov.br/observatorio" />
+              <Field label="Banco local" value="PostgreSQL" />
+              <Field label="CORS desenvolvimento" value="localhost:3000, 5173, 8080" />
+              <Field label="Importação Lattes" value="CSV/XML local" />
+              <Field label="Rotas admin" value="X-Admin-Token" />
             </div>
           </div>
 
@@ -56,17 +49,16 @@ function SettingsPage() {
             <ul className="mt-5 divide-y hairline overflow-hidden rounded-md border bg-surface">
               {[
                 {
-                  t: "Modo de busca padrão",
-                  d: "Define como as consultas são executadas inicialmente.",
-                  v: "Híbrido",
+                  t: "Fonte da busca de produções",
+                  d: "A tela de busca consulta a API pública da CAPES.",
+                  v: "CAPES",
                 },
                 {
                   t: "Idioma das sínteses",
-                  d: "Idioma utilizado pelo assistente para resumos.",
+                  d: "Idioma usado nas mensagens da interface.",
                   v: "Português",
                 },
                 { t: "Densidade de resultados", d: "Compacta ou confortável.", v: "Confortável" },
-                { t: "Tema da interface", d: "Sistema, claro ou escuro.", v: "Sistema" },
               ].map((p) => (
                 <li key={p.t} className="grid grid-cols-[1fr_auto] items-center gap-6 px-6 py-4">
                   <div>
@@ -85,10 +77,10 @@ function SettingsPage() {
             <SectionHeader eyebrow="Integrações" title="Fontes de dados conectadas" />
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               {[
-                { n: "Plataforma Lattes", s: "Sincronizado · há 4 h" },
-                { n: "ORCID", s: "Sincronizado · há 1 d" },
-                { n: "DSpace institucional (UNEB)", s: "Sincronizado · há 2 h" },
-                { n: "Power BI Workspace", s: "Não conectado" },
+                { n: "Plataforma Sucupira/CAPES", s: "Conectada via /api/capes/*" },
+                { n: "Base local Lattes", s: "Conectada via PostgreSQL" },
+                { n: "Importação Qualis", s: "Disponível em rota administrativa protegida" },
+                { n: "Importação de pesquisadores", s: "Disponível via scripts e backend local" },
               ].map((i) => (
                 <div
                   key={i.n}
@@ -98,9 +90,9 @@ function SettingsPage() {
                     <div className="text-[14px] text-foreground">{i.n}</div>
                     <div className="text-[12px] text-muted-foreground">{i.s}</div>
                   </div>
-                  <button className="rounded-sm border px-3 py-1.5 text-[12.5px] hover:bg-muted">
-                    Gerenciar
-                  </button>
+                  <span className="rounded-sm border px-3 py-1.5 text-[12.5px] text-muted-foreground">
+                    Ativo
+                  </span>
                 </div>
               ))}
             </div>

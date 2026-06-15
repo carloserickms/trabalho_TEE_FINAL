@@ -16,10 +16,10 @@ export function SearchInput({
   const sugg = useMemo(() => {
     const base = [
       "competências em recuperação de informação no Nordeste",
-      "pesquisadores que atuam com pgvector e Lattes",
+      "pesquisadores e produções em ciência de dados",
       "ontologias em ciência da informação",
       "PLN para o português brasileiro em domínios acadêmicos",
-      "evolução da produção em educação digital 2018–2024",
+      "evolução da produção em educação digital 2018-2024",
     ];
     if (!v) return base;
     const q = v.toLowerCase();
@@ -34,10 +34,11 @@ export function SearchInput({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+          const params = new URLSearchParams(
+            typeof window !== "undefined" ? window.location.search : "",
+          );
           params.set("q", v);
-          const mode = params.get("mode") || "hybrid";
-          params.set("mode", mode);
+          params.delete("mode");
           window.location.href = `/buscar?${params.toString()}`;
         }}
         className={`flex ${tall} items-center gap-3 rounded-md border bg-surface px-4 shadow-[0_1px_0_rgba(0,0,0,0.02)] focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/5`}
@@ -48,15 +49,15 @@ export function SearchInput({
           onChange={(e) => setV(e.target.value)}
           onFocus={() => setFocus(true)}
           onBlur={() => setTimeout(() => setFocus(false), 120)}
-          placeholder='Pesquise por tema, autor, instituição ou DOI — ex.: "redes neurais aplicadas à educação superior"'
+          placeholder='Pesquise por tema, autor, instituição ou termo CAPES, ex.: "redes neurais educação superior"'
           className={`flex-1 bg-transparent ${text} text-foreground placeholder:text-muted-foreground/80 focus:outline-none`}
         />
         <div className="hidden items-center gap-2 md:flex">
           <span className="rounded-sm border hairline bg-muted px-2 py-1 font-mono text-[10.5px] text-muted-foreground">
-            Semântica
+            CAPES
           </span>
           <span className="rounded-sm border hairline bg-muted px-2 py-1 font-mono text-[10.5px] text-muted-foreground">
-            Full-text
+            Facetas
           </span>
         </div>
         <button
@@ -70,7 +71,7 @@ export function SearchInput({
       {withSuggestions && focus && sugg.length > 0 && (
         <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-md border bg-popover shadow-lg">
           <div className="px-4 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Sugestões semânticas
+            Sugestões de busca
           </div>
           <ul className="border-t hairline">
             {sugg.map((s) => (
@@ -78,9 +79,7 @@ export function SearchInput({
                 <Link
                   to="/buscar"
                   search={(() => {
-                    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-                    const mode = params.get("mode") || "hybrid";
-                    return { q: s, mode } as never;
+                    return { q: s } as never;
                   })()}
                   className="flex items-center gap-3 px-4 py-2.5 text-[13.5px] hover:bg-muted"
                 >

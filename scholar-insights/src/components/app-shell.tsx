@@ -45,17 +45,17 @@ export function AppHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          <button className="hidden rounded-sm border hairline px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground md:inline-flex">
-            <span className="mr-2">Buscar</span>
-            <kbd className="rounded border hairline bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-              ⌘K
-            </kbd>
-          </button>
+          <Link
+            to="/buscar"
+            className="hidden rounded-sm border hairline px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground md:inline-flex"
+          >
+            Buscar
+          </Link>
           <Link
             to="/configuracoes"
             className="rounded-sm border hairline bg-surface px-3 py-1.5 text-[13px] text-foreground hover:bg-muted"
           >
-            Entrar
+            Config
           </Link>
         </div>
       </div>
@@ -75,25 +75,39 @@ export function AppFooter() {
             <span className="font-serif text-[15px]">Scientia Discovery</span>
           </div>
           <p className="mt-3 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">
-            Plataforma de busca semântica e mapeamento de competências científicas, integrada à base
-            Lattes e a repositórios institucionais.
+            Plataforma para consultar produções CAPES, pesquisadores locais da base Lattes e
+            indicadores científicos.
           </p>
         </div>
         {[
-          { t: "Plataforma", l: ["Busca", "Pesquisadores", "Analytics", "Assistente"] },
-          { t: "Recursos", l: ["Documentação", "API REST", "Changelog", "Status"] },
-          { t: "Institucional", l: ["Sobre", "Pesquisa & dados", "Privacidade", "Contato"] },
-        ].map((c) => (
-          <div key={c.t}>
+          {
+            t: "Plataforma",
+            l: [
+              { label: "Busca", to: "/buscar" },
+              { label: "Pesquisadores", to: "/pesquisadores" },
+              { label: "Analytics", to: "/dashboard" },
+              { label: "Assistente", to: "/assistente" },
+            ],
+          },
+          {
+            t: "Recursos",
+            l: [
+              { label: "Documentação", to: "/api-docs" },
+              { label: "API REST", to: "/api-docs" },
+              { label: "Configurações", to: "/configuracoes" },
+            ],
+          },
+        ].map((column) => (
+          <div key={column.t}>
             <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              {c.t}
+              {column.t}
             </div>
             <ul className="mt-3 space-y-2 text-[13px]">
-              {c.l.map((i) => (
-                <li key={i}>
-                  <a href="#" className="text-foreground/80 hover:text-foreground">
-                    {i}
-                  </a>
+              {column.l.map((item) => (
+                <li key={item.label}>
+                  <Link to={item.to} className="text-foreground/80 hover:text-foreground">
+                    {item.label}
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -72,50 +72,70 @@ def _semantic_score(query: str, row: dict[str, Any]) -> float:
 
 def list_researchers() -> list[dict[str, Any]]:
     researchers = query_rows("SELECT * FROM pesquisador ORDER BY nome_completo")
-    output: list[dict[str, Any]] = []
-    for researcher in researchers:
-        pub_count = query_one(
-            "SELECT COUNT(*) AS count FROM producao WHERE id_pesquisador = %s",
-            (researcher["id_pesquisador"],),
-        )
-        production_years = query_rows(
+    if not researchers:
+        return []
+
+    publication_counts = {
+        row["id_pesquisador"]: row["count"]
+        for row in query_rows(
             """
-            SELECT ano, COUNT(*) AS count
+            SELECT id_pesquisador, COUNT(*) AS count
             FROM producao
-            WHERE id_pesquisador = %s
-            GROUP BY ano
-            ORDER BY ano
-            """,
-            (researcher["id_pesquisador"],),
-        )
-        recent_publications = query_rows(
+            GROUP BY id_pesquisador
             """
-            SELECT *
-            FROM producao
-            WHERE id_pesquisador = %s AND tipo = 'ARTIGO'
-            ORDER BY ano DESC NULLS LAST, titulo ASC
-            LIMIT 4
-            """,
-            (researcher["id_pesquisador"],),
         )
-        output.append(
-            serialize_researcher(
-                researcher,
-                pub_count["count"] if pub_count else 0,
-                [{"year": row["ano"], "count": row["count"]} for row in production_years],
-                [
-                    {
-                        "year": row["ano"],
-                        "title": row["titulo"],
-                        "venue": row.get("periodico") or row.get("evento") or "",
-                        "qualis": row.get("qualis") or "",
-                        "doi": row.get("doi") or "",
-                    }
-                    for row in recent_publications
-                ],
-            )
+    }
+
+    production_by_researcher: dict[Any, list[dict[str, Any]]] = {}
+    for row in query_rows(
+        """
+        SELECT id_pesquisador, ano, COUNT(*) AS count
+        FROM producao
+        GROUP BY id_pesquisador, ano
+        ORDER BY id_pesquisador, ano
+        """
+    ):
+        production_by_researcher.setdefault(row["id_pesquisador"], []).append(
+            {"year": row["ano"], "count": row["count"]}
         )
-    return output
+
+    recent_by_researcher: dict[Any, list[dict[str, Any]]] = {}
+    for row in query_rows(
+        """
+        SELECT *
+        FROM (
+            SELECT
+                p.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY id_pesquisador
+                    ORDER BY ano DESC NULLS LAST, titulo ASC
+                ) AS row_number
+            FROM producao p
+            WHERE tipo = 'ARTIGO'
+        ) ranked
+        WHERE row_number <= 4
+        ORDER BY id_pesquisador, row_number
+        """
+    ):
+        recent_by_researcher.setdefault(row["id_pesquisador"], []).append(
+            {
+                "year": row["ano"],
+                "title": row["titulo"],
+                "venue": row.get("periodico") or row.get("evento") or "",
+                "qualis": row.get("qualis") or "",
+                "doi": row.get("doi") or "",
+            }
+        )
+
+    return [
+        serialize_researcher(
+            researcher,
+            publication_counts.get(researcher["id_pesquisador"], 0),
+            production_by_researcher.get(researcher["id_pesquisador"], []),
+            recent_by_researcher.get(researcher["id_pesquisador"], []),
+        )
+        for researcher in researchers
+    ]
 
 
 def get_researcher(lattes_id: str) -> dict[str, Any] | None:

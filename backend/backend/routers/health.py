@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.db import query_one
 from etl_lattes import get_connection
 
 router = APIRouter()
@@ -18,7 +17,9 @@ def health() -> dict[str, str]:
     try:
         conn = get_connection()
         try:
-            query_one("SELECT 1")
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
         finally:
             conn.close()
         database = "connected"

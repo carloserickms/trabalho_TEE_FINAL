@@ -59,6 +59,7 @@ function DashboardPage() {
   const totalPesq = stats?.totalPesquisadores ?? 0;
   const qualisPct = stats?.qualisA1A2Percent ?? 0;
   const prodAnos = stats?.anos ?? [];
+  const hasQualisData = qualis.some((item) => item.label !== "Outros" && item.value > 0);
 
   return (
     <PageShell>
@@ -70,17 +71,6 @@ function DashboardPage() {
               title="Analytics da produção científica"
               description="Indicadores agregados sobre o conjunto de pesquisadores e produções indexadas."
             />
-            <div className="flex flex-wrap gap-2">
-              <select className="rounded-sm border bg-surface px-3 py-1.5 text-[12.5px]">
-                <option>Todos os períodos</option>
-              </select>
-              <select className="rounded-sm border bg-surface px-3 py-1.5 text-[12.5px]">
-                <option>Todas as instituições</option>
-              </select>
-              <button className="rounded-sm bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground">
-                Exportar
-              </button>
-            </div>
           </div>
         </div>
       </section>
@@ -95,7 +85,10 @@ function DashboardPage() {
             label="Pesquisadores ativos"
             value={totalPesq > 0 ? totalPesq.toLocaleString("pt-BR") : "—"}
           />
-          <StatCard label="Qualis A1 / A2" value={qualisPct > 0 ? `${qualisPct}%` : "—"} />
+          <StatCard
+            label="Qualis A1 / A2"
+            value={hasQualisData && qualisPct > 0 ? `${qualisPct}%` : "—"}
+          />
           <StatCard
             label="Instituições"
             value={institutions.length > 0 ? institutions.length.toLocaleString("pt-BR") : "—"}
@@ -189,27 +182,29 @@ function DashboardPage() {
               </h3>
             </div>
             <div className="space-y-3 p-6">
-              {qualis.length > 0 ? (
-                qualis.map((q) => (
-                  <div
-                    key={q.label}
-                    className="grid grid-cols-[40px_1fr_40px] items-center gap-3 text-[12.5px]"
-                  >
-                    <span className="font-mono text-[12px] text-foreground">{q.label}</span>
-                    <div className="h-2 overflow-hidden rounded-sm bg-muted">
-                      <div
-                        className="h-full rounded-sm bg-scholar/80"
-                        style={{ width: `${q.value * 4}%` }}
-                      />
+              {hasQualisData ? (
+                qualis
+                  .filter((q) => q.label !== "Outros")
+                  .map((q) => (
+                    <div
+                      key={q.label}
+                      className="grid grid-cols-[40px_1fr_40px] items-center gap-3 text-[12.5px]"
+                    >
+                      <span className="font-mono text-[12px] text-foreground">{q.label}</span>
+                      <div className="h-2 overflow-hidden rounded-sm bg-muted">
+                        <div
+                          className="h-full rounded-sm bg-scholar/80"
+                          style={{ width: `${q.value * 4}%` }}
+                        />
+                      </div>
+                      <span className="text-right font-mono text-[11.5px] text-muted-foreground">
+                        {q.value}%
+                      </span>
                     </div>
-                    <span className="text-right font-mono text-[11.5px] text-muted-foreground">
-                      {q.value}%
-                    </span>
-                  </div>
-                ))
+                  ))
               ) : (
                 <div className="text-[13px] text-muted-foreground text-center py-8">
-                  Dados Qualis não disponíveis. Faça o upload da planilha Qualis via API.
+                  Dados Qualis ainda não carregados na base local.
                 </div>
               )}
             </div>

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell } from "@/components/app-shell";
 import { Tag } from "@/components/ui-kit";
+import { searchCapesProductions } from "@/lib/api";
 import { useState } from "react";
 
 export const Route = createFileRoute("/assistente")({
@@ -24,58 +25,57 @@ type Msg = {
 
 const initial: Msg[] = [
   {
-    role: "user",
-    content:
-      "Quais são os principais grupos brasileiros que pesquisam recuperação semântica aplicada a currículos Lattes?",
-  },
-  {
     role: "assistant",
     content:
-      "A produção concentra-se em três núcleos principais. O grupo da UNEB, liderado por Ana Lúcia Cardoso, atua sobre embeddings contextuais e busca híbrida em currículos Lattes, com ênfase em mapeamento de competências regionais. Na USP, o grupo de Eduardo Pires trabalha escalabilidade de recuperação esparsa-densa em corpora científicos. Na UFPE, Sofia Beltrão lidera trabalhos de adaptação de modelos de linguagem ao português acadêmico. Há colaboração documentada entre UNEB e UFBA por meio do grupo de Marcelo H. Tavares, com foco em cienciometria.",
-    sources: [
-      {
-        title:
-          "Embeddings contextuais para mapeamento de competências em repositórios institucionais",
-        venue: "SBBD",
-        year: 2024,
-      },
-      {
-        title: "Hybrid retrieval over Lattes curricula: a Brazilian case study",
-        venue: "IP&M",
-        year: 2024,
-      },
-      {
-        title: "Scaling sparse-dense hybrid retrieval for scholarly corpora",
-        venue: "SIGIR",
-        year: 2024,
-      },
-    ],
+      "Digite um termo, área, autor, instituição ou tema para recuperar produções diretamente da API pública da Plataforma Sucupira/CAPES.",
   },
 ];
 
 function AssistantPage() {
   const [messages, setMessages] = useState<Msg[]>(initial);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const send = () => {
-    if (!input.trim()) return;
-    setMessages((m) => [
-      ...m,
-      { role: "user", content: input },
-      {
-        role: "assistant",
-        content:
-          "Síntese baseada nos documentos indexados: a literatura recente aponta convergência entre métodos de recuperação esparsa e densa. Recomendo consultar os trabalhos abaixo para um panorama mais completo, e considerar o filtro Qualis A1/A2 ao restringir a leitura.",
-        sources: [
-          {
-            title: "Open knowledge graphs from institutional repositories",
-            venue: "Scientometrics",
-            year: 2023,
-          },
-        ],
-      },
+  const send = async () => {
+    const query = input.trim();
+    if (!query || loading) return;
+
+    setLoading(true);
+    setMessages((current) => [
+      ...current,
+      { role: "user", content: query },
+      { role: "assistant", content: "Consultando a base CAPES..." },
     ]);
     setInput("");
+
+    try {
+      const response = await searchCapesProductions(query, {}, 0, 5);
+      const sources = response.results.map((result) => ({
+        title: result.title,
+        venue: result.venue || "CAPES",
+        year: result.year,
+      }));
+      const content =
+        response.results.length > 0
+          ? `Encontrei ${response.results.length} produções relacionadas na base CAPES. Os primeiros resultados indicam ${summarizeResults(response.results)}. Use a página de busca para refinar por ano, instituição, área ou subtipo.`
+          : "Nenhuma produção foi encontrada na CAPES para essa consulta. Tente um termo mais amplo, uma instituição ou uma área de conhecimento.";
+
+      setMessages((current) =>
+        replaceLastAssistant(current, { role: "assistant", content, sources }),
+      );
+    } catch (error) {
+      setMessages((current) =>
+        replaceLastAssistant(current, {
+          role: "assistant",
+          content:
+            error instanceof Error
+              ? `Não foi possível consultar a API CAPES agora: ${error.message}`
+              : "Não foi possível consultar a API CAPES agora.",
+        }),
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -93,42 +93,42 @@ function AssistantPage() {
             </div>
             <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-              contexto: 41 287 currículos · 312 940 produções
+              contexto: API CAPES · base local Lattes
             </div>
           </div>
 
           <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
-            {messages.map((m, i) => (
-              <div key={i} className="flex gap-4">
+            {messages.map((message, index) => (
+              <div key={index} className="flex gap-4">
                 <div
                   className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-sm font-mono text-[10.5px] ${
-                    m.role === "user"
+                    message.role === "user"
                       ? "bg-muted text-foreground"
                       : "bg-primary text-primary-foreground"
                   }`}
                 >
-                  {m.role === "user" ? "Você" : "S"}
+                  {message.role === "user" ? "Você" : "S"}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-serif text-[15.5px] leading-relaxed text-foreground/95">
-                    {m.content}
+                    {message.content}
                   </div>
-                  {m.sources && (
+                  {message.sources && message.sources.length > 0 && (
                     <div className="mt-4 rounded-md border bg-surface-elevated p-4">
                       <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                         Fontes utilizadas
                       </div>
                       <ol className="mt-2 space-y-1.5 text-[13px]">
-                        {m.sources.map((s, idx) => (
-                          <li key={idx} className="flex gap-3">
+                        {message.sources.map((source, idx) => (
+                          <li key={`${source.title}-${idx}`} className="flex gap-3">
                             <span className="font-mono text-[11px] text-muted-foreground">
                               [{idx + 1}]
                             </span>
                             <span>
-                              <span className="text-foreground">{s.title}</span>
+                              <span className="text-foreground">{source.title}</span>
                               <span className="text-muted-foreground">
                                 {" "}
-                                — {s.venue}, {s.year}
+                                — {source.venue}, {source.year || "ano não informado"}
                               </span>
                             </span>
                           </li>
@@ -145,27 +145,28 @@ function AssistantPage() {
             <div className="flex items-end gap-3 rounded-md border bg-background p-3 focus-within:border-foreground/40">
               <textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void send();
                   }
                 }}
                 rows={2}
-                placeholder="Pergunte sobre pesquisadores, áreas, métricas ou peça resumos comparativos…"
+                placeholder="Pergunte sobre pesquisadores, áreas, instituições ou temas de produção científica..."
                 className="flex-1 resize-none bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/80 focus:outline-none"
               />
               <button
-                onClick={send}
-                className="rounded-sm bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:bg-primary/90"
+                onClick={() => void send()}
+                disabled={loading}
+                className="rounded-sm bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Enviar
+                {loading ? "Buscando" : "Enviar"}
               </button>
             </div>
             <div className="mt-2 flex items-center justify-between text-[11.5px] text-muted-foreground">
-              <span>As respostas citam as fontes recuperadas da base institucional.</span>
-              <span className="font-mono">⇧ + ↵ nova linha</span>
+              <span>As respostas usam os primeiros registros recuperados da API CAPES.</span>
+              <span className="font-mono">Shift + Enter nova linha</span>
             </div>
           </div>
         </div>
@@ -177,17 +178,17 @@ function AssistantPage() {
             </div>
             <ul className="mt-3 space-y-2 text-[13px]">
               {[
-                "Resumir a produção de Ana L. Cardoso em 5 pontos",
-                "Sugerir três pesquisadores afins a esta linha",
-                "Comparar abordagens de busca híbrida",
-                "Mapear evolução temática em 2020–2024",
-              ].map((s) => (
-                <li key={s}>
+                "inteligência artificial educação",
+                "produção científica em saúde coletiva",
+                "recuperação da informação",
+                "UFBA educação 2024",
+              ].map((suggestion) => (
+                <li key={suggestion}>
                   <button
-                    onClick={() => setInput(s)}
+                    onClick={() => setInput(suggestion)}
                     className="text-left text-foreground/85 underline-offset-4 hover:underline"
                   >
-                    {s}
+                    {suggestion}
                   </button>
                 </li>
               ))}
@@ -200,26 +201,54 @@ function AssistantPage() {
             </div>
             <div className="mt-3 space-y-2 text-[13px]">
               <div className="flex items-center justify-between">
-                <span className="text-foreground/85">Área</span>
-                <Tag>Ciência da Computação</Tag>
+                <span className="text-foreground/85">Consulta</span>
+                <Tag>Texto livre</Tag>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-foreground/85">Janela temporal</span>
-                <Tag>2020 — 2024</Tag>
+                <Tag>Sem filtro</Tag>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-foreground/85">Qualis</span>
-                <Tag>A1, A2</Tag>
+                <span className="text-foreground/85">Fonte</span>
+                <Tag>CAPES</Tag>
               </div>
             </div>
           </div>
 
           <div className="rounded-md border bg-surface p-5 text-[12.5px] text-muted-foreground">
-            O assistente opera sobre embeddings densos indexados em pgvector e recupera documentos
-            por similaridade contextual; respostas sintetizam apenas o conteúdo recuperado.
+            Esta tela recupera produções reais pela API pública da Plataforma Sucupira/CAPES e
+            apresenta uma síntese simples dos primeiros resultados retornados.
           </div>
         </aside>
       </section>
     </PageShell>
   );
+}
+
+function replaceLastAssistant(messages: Msg[], next: Msg): Msg[] {
+  const updated = [...messages];
+  for (let index = updated.length - 1; index >= 0; index -= 1) {
+    if (updated[index].role === "assistant") {
+      updated[index] = next;
+      return updated;
+    }
+  }
+  return [...updated, next];
+}
+
+function summarizeResults(results: Awaited<ReturnType<typeof searchCapesProductions>>["results"]) {
+  const years = [...new Set(results.map((result) => result.year).filter(Boolean))].sort(
+    (a, b) => b - a,
+  );
+  const venues = [...new Set(results.map((result) => result.venue).filter(Boolean))].slice(0, 3);
+  const authors = [...new Set(results.flatMap((result) => result.authors).filter(Boolean))].slice(
+    0,
+    3,
+  );
+
+  const parts = [];
+  if (years.length) parts.push(`registros entre ${years[years.length - 1]} e ${years[0]}`);
+  if (venues.length) parts.push(`vínculos como ${venues.join(", ")}`);
+  if (authors.length) parts.push(`autorias incluindo ${authors.join(", ")}`);
+  return parts.length ? parts.join("; ") : "registros relacionados ao termo informado";
 }

@@ -8,7 +8,7 @@ export const Route = createFileRoute("/api-docs")({
       { title: "API — Scientia Discovery" },
       {
         name: "description",
-        content: "Documentação da API REST para acesso programático à base indexada.",
+        content: "Documentação da API REST disponível no backend atual.",
       },
     ],
   }),
@@ -18,22 +18,43 @@ export const Route = createFileRoute("/api-docs")({
 const endpoints = [
   {
     m: "GET",
-    p: "/v1/researchers",
-    d: "Lista pesquisadores com filtros por área, instituição e Qualis.",
+    p: "/api/capes/producoes",
+    d: "Consulta produções na API pública da Plataforma Sucupira/CAPES com search, query por facetas e paginação.",
   },
-  { m: "GET", p: "/v1/researchers/{id}", d: "Retorna o perfil consolidado de um pesquisador." },
+  {
+    m: "GET",
+    p: "/api/capes/facets",
+    d: "Lista as facetas de produção disponíveis para montar filtros no front.",
+  },
+  {
+    m: "GET",
+    p: "/api/capes/facets/{filter_name}",
+    d: "Obtém valores válidos de uma faceta CAPES, como ano, instituição, área ou programa.",
+  },
+  {
+    m: "GET",
+    p: "/api/pesquisadores",
+    d: "Lista pesquisadores importados da base local Lattes.",
+  },
+  { m: "GET", p: "/api/pesquisadores/{id}", d: "Retorna o perfil consolidado de um pesquisador." },
+  {
+    m: "GET",
+    p: "/api/producoes/busca",
+    d: "Executa busca textual/ranqueada sobre as produções carregadas no banco local.",
+  },
   {
     m: "POST",
     p: "/v1/search",
-    d: "Executa busca textual, semântica ou híbrida sobre as produções.",
+    d: "Endpoint compatível com clientes externos para busca na base local.",
   },
   {
     m: "POST",
     p: "/v1/embeddings",
-    d: "Gera embeddings vetoriais a partir de um trecho ou documento.",
+    d: "Gera um vetor determinístico simples para prototipação e testes de integração.",
   },
-  { m: "GET", p: "/v1/metrics/area", d: "Indicadores agregados por área CNPq." },
-  { m: "GET", p: "/v1/metrics/institution", d: "Indicadores agregados por instituição." },
+  { m: "GET", p: "/api/dashboard/stats", d: "Totais e série histórica do painel." },
+  { m: "GET", p: "/api/metrics/area", d: "Indicadores agregados por área." },
+  { m: "GET", p: "/api/metrics/institution", d: "Indicadores agregados por instituição." },
 ];
 
 function ApiDocsPage() {
@@ -48,30 +69,19 @@ function ApiDocsPage() {
             <ul className="mt-3 space-y-1.5 text-foreground/85">
               {[
                 "Visão geral",
-                "Autenticação",
+                "CAPES",
                 "Pesquisadores",
-                "Busca",
-                "Embeddings",
+                "Busca local",
                 "Métricas",
-                "Limites",
-              ].map((s) => (
-                <li key={s}>
-                  <a href="#" className="hover:text-foreground">
-                    {s}
-                  </a>
-                </li>
+                "Administração",
+              ].map((item) => (
+                <li key={item}>{item}</li>
               ))}
             </ul>
           </div>
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              SDKs
-            </div>
-            <ul className="mt-3 space-y-1.5 text-foreground/85">
-              {["Python · scientia-py", "TypeScript · @scientia/sdk", "R · scientiaR"].map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
+          <div className="rounded-md border bg-surface p-4 text-[12.5px] text-muted-foreground">
+            Rotas administrativas de importação exigem o header <code>X-Admin-Token</code> quando o
+            backend está configurado com <code>ADMIN_API_TOKEN</code>.
           </div>
         </aside>
 
@@ -79,72 +89,62 @@ function ApiDocsPage() {
           <div>
             <SectionHeader
               eyebrow="API REST"
-              title="Acesso programático à base"
-              description="A API expõe os mesmos recursos disponíveis na interface, com versionamento estável, autenticação por chave e limites por instituição."
+              title="Endpoints disponíveis no backend atual"
+              description="A API combina a base local Lattes importada para PostgreSQL com consultas em tempo real à Plataforma Sucupira/CAPES para produções e facetas."
             />
             <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <Info label="Base URL" value="https://api.scientia.discovery/v1" />
+              <Info label="Base local" value="http://localhost:8000" />
               <Info label="Formato" value="JSON · UTF-8" />
-              <Info label="Autenticação" value="Bearer token" />
+              <Info label="CAPES" value="/api/capes/*" />
             </div>
           </div>
 
           <div>
             <SectionHeader title="Endpoints" />
             <ul className="mt-5 divide-y hairline overflow-hidden rounded-md border bg-surface">
-              {endpoints.map((e) => (
+              {endpoints.map((endpoint) => (
                 <li
-                  key={e.p}
-                  className="grid grid-cols-[64px_1fr_2fr] items-center gap-4 px-5 py-3 text-[13.5px]"
+                  key={endpoint.p}
+                  className="grid gap-3 px-5 py-3 text-[13.5px] md:grid-cols-[64px_1fr_2fr] md:items-center md:gap-4"
                 >
                   <span
                     className={`inline-flex w-fit rounded-sm px-2 py-0.5 font-mono text-[11px] ${
-                      e.m === "GET" ? "bg-primary/8 text-primary" : "bg-scholar/10 text-scholar"
+                      endpoint.m === "GET"
+                        ? "bg-primary/8 text-primary"
+                        : "bg-scholar/10 text-scholar"
                     }`}
                   >
-                    {e.m}
+                    {endpoint.m}
                   </span>
-                  <code className="font-mono text-[13px] text-foreground">{e.p}</code>
-                  <span className="text-muted-foreground">{e.d}</span>
+                  <code className="font-mono text-[13px] text-foreground">{endpoint.p}</code>
+                  <span className="text-muted-foreground">{endpoint.d}</span>
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <SectionHeader title="Exemplo — busca híbrida" />
+            <SectionHeader title="Exemplo — busca CAPES com facetas" />
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <pre className="overflow-x-auto rounded-md border bg-surface-elevated p-4 font-mono text-[12px] leading-relaxed text-foreground/90">
-                {`curl -X POST https://api.scientia.discovery/v1/search \\
-  -H "Authorization: Bearer $SCIENTIA_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "embeddings para mapeamento de competências",
-    "mode": "hybrid",
-    "filters": {
-      "area": ["Ciência da Computação"],
-      "year": { "from": 2020, "to": 2024 },
-      "qualis": ["A1", "A2"]
-    },
-    "limit": 20
-  }'`}
+                {`curl "http://localhost:8000/api/capes/producoes?search=inteligencia%20artificial&year=2024&institution=UFBA&page=0&size=20"`}
               </pre>
               <pre className="overflow-x-auto rounded-md border bg-surface-elevated p-4 font-mono text-[12px] leading-relaxed text-foreground/90">
                 {`{
-  "took_ms": 142,
-  "total": 1247,
   "results": [
     {
-      "id": "wos:000984712300012",
-      "title": "Embeddings contextuais para…",
-      "authors": ["Ana L. Cardoso", "M. H. Tavares"],
-      "venue": "SBBD",
+      "id": "capes-...",
+      "title": "Título da produção",
+      "authors": ["Autor"],
+      "venue": "UFBA · Programa",
       "year": 2024,
-      "qualis": "A2",
-      "doi": "10.5753/sbbd.2024.0142",
-      "similarity": 0.94
+      "highlights": ["Bibliográfica", "Artigo"]
     }
-  ]
+  ],
+  "page": 0,
+  "size": 20,
+  "hasMore": true,
+  "source": "capes"
 }`}
               </pre>
             </div>

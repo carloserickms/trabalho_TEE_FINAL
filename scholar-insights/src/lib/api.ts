@@ -20,10 +20,8 @@ const SERVER_API = (() => {
 
 const USE_LOCAL_DATA =
   import.meta.env.PROD &&
-  /^(?:https?:\/\/)?localhost(?::\d+)?$|^(?:https?:\/\/)?127\.0\.0\.1(?::\d+)?$/i.test(
-    SERVER_API,
-  );
-const API = USE_LOCAL_DATA ? "" : import.meta.env.SSR ? SERVER_API : "";
+  /^(?:https?:\/\/)?localhost(?::\d+)?$|^(?:https?:\/\/)?127\.0\.0\.1(?::\d+)?$/i.test(SERVER_API);
+const API = USE_LOCAL_DATA ? "" : SERVER_API;
 
 export interface ProductionYear {
   year: number;
@@ -96,6 +94,36 @@ export interface AreaMetric {
   count: number;
 }
 
+export interface FacetOption {
+  key: string;
+  label: string;
+}
+
+export interface CapesFacet {
+  id: string;
+  key: string;
+  label: string;
+  values: FacetOption[];
+}
+
+export interface CapesSearchFilters {
+  year?: string;
+  institution?: string;
+  subtype?: string;
+  largeArea?: string;
+  area?: string;
+  evaluationArea?: string;
+  program?: string;
+}
+
+export interface CapesSearchResponse {
+  results: SearchResult[];
+  page: number;
+  size: number;
+  hasMore: boolean;
+  source: "capes";
+}
+
 function toApiResearcher(researcher: (typeof localResearchers)[number]): APIResearcher {
   return {
     ...researcher,
@@ -123,7 +151,9 @@ function localDashboardStats(researchers: APIResearcher[]): DashboardStats {
   const totalPesquisadores = researchers.length;
   const years = aggregateProductionYears(researchers);
   const totalSampleResults = localSampleResults.length || 1;
-  const a1a2 = localSampleResults.filter((item) => item.qualis === "A1" || item.qualis === "A2").length;
+  const a1a2 = localSampleResults.filter(
+    (item) => item.qualis === "A1" || item.qualis === "A2",
+  ).length;
 
   return {
     totalProducoes,
@@ -141,7 +171,9 @@ function scoreText(query: string, text: string): number {
   if (haystack.includes(q)) return 1;
 
   const tokens = q.split(/\s+/).filter(Boolean);
-  return tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0) / tokens.length;
+  return (
+    tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0) / tokens.length
+  );
 }
 
 function localSearchProductions(query: string): SearchResult[] {
@@ -150,14 +182,26 @@ function localSearchProductions(query: string): SearchResult[] {
 
   return localSampleResults
     .map((item) => {
-      const joined = [item.title, item.abstract, item.venue, item.authors.join(" "), item.highlights.join(" ")]
+      const joined = [
+        item.title,
+        item.abstract,
+        item.venue,
+        item.authors.join(" "),
+        item.highlights.join(" "),
+      ]
         .join(" ")
         .toLowerCase();
       const similarity = Math.max(item.similarity, scoreText(q, joined));
       return { ...item, similarity };
     })
     .filter((item) => {
-      const joined = [item.title, item.abstract, item.venue, item.authors.join(" "), item.highlights.join(" ")]
+      const joined = [
+        item.title,
+        item.abstract,
+        item.venue,
+        item.authors.join(" "),
+        item.highlights.join(" "),
+      ]
         .join(" ")
         .toLowerCase();
       return joined.includes(q) || q.split(/\s+/).some((token) => token && joined.includes(token));
@@ -165,7 +209,11 @@ function localSearchProductions(query: string): SearchResult[] {
     .sort((a, b) => b.similarity - a.similarity);
 }
 
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = 15000,
+): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -225,11 +273,47 @@ function localApiGet<T>(path: string): Promise<T> {
     value = localInstitutions;
   } else if (pathname === "/api/metrics/area") {
     value = localAreas.map(({ name, count }) => ({ name, count }));
+  } else if (pathname === "/api/capes/facets") {
+    value = localCapesFacets();
+  } else if (pathname === "/api/capes/producoes") {
+    value = {
+      results: localSearchProductions(params.get("search") ?? params.get("q") ?? ""),
+      page: Number(params.get("page") ?? 0),
+      size: Number(params.get("size") ?? 20),
+      hasMore: false,
+      source: "capes",
+    };
   } else {
     throw new Error(`Local API route not implemented: ${pathname}`);
   }
 
   return Promise.resolve(value as T);
+}
+
+function localCapesFacets(): CapesFacet[] {
+  return [
+    {
+      id: "year",
+      key: "ano-base",
+      label: "Ano",
+      values: ["2024", "2023", "2022", "2021", "2020"].map((year) => ({
+        key: year,
+        label: year,
+      })),
+    },
+    {
+      id: "institution",
+      key: "sigla-ies",
+      label: "Instituição",
+      values: localInstitutions.map((institution) => ({ key: institution, label: institution })),
+    },
+    {
+      id: "largeArea",
+      key: "nome-grande-area-conhecimento",
+      label: "Grande área",
+      values: localAreas.map((area) => ({ key: area.name.toUpperCase(), label: area.name })),
+    },
+  ];
 }
 
 export async function getAllResearchers(): Promise<APIResearcher[]> {
@@ -272,4 +356,24 @@ export async function getInstituicoes(): Promise<string[]> {
 
 export async function getAreaDistribution(): Promise<AreaMetric[]> {
   return apiGet<AreaMetric[]>("/api/metrics/area");
+}
+
+export async function searchCapesProductions(
+  search: string,
+  filters: CapesSearchFilters = {},
+  page = 0,
+  size = 20,
+): Promise<CapesSearchResponse> {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search.trim());
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  params.set("page", String(page));
+  params.set("size", String(size));
+  return apiGet<CapesSearchResponse>(`/api/capes/producoes?${params.toString()}`);
+}
+
+export async function getCapesFacets(): Promise<CapesFacet[]> {
+  return apiGet<CapesFacet[]>("/api/capes/facets");
 }

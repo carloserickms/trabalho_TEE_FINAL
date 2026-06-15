@@ -287,9 +287,10 @@ export const sampleResults = [
     qualis: "A2",
     doi: "10.5753/sbbd.2024.0142",
     similarity: 0.94,
+    pesquisadorId: "ana-l-cardoso",
     abstract:
-      "Apresentamos um método de representação vetorial de currículos Lattes que combina recuperação esparsa BM25 com embeddings densos para mapear competências científicas em programas de pós-graduação. A abordagem foi avaliada sobre um corpus de 41 mil currículos coletados via ETL com Apache Hop e indexados em PostgreSQL com pgvector.",
-    highlights: ["embeddings", "competências", "pgvector", "Lattes"],
+      "Apresentamos um método de organização de currículos Lattes para mapear competências científicas em programas de pós-graduação, combinando busca textual, indicadores de produção e filtros institucionais.",
+    highlights: ["competências", "busca textual", "Lattes"],
   },
   {
     id: "r2",
@@ -300,6 +301,7 @@ export const sampleResults = [
     qualis: "A1",
     doi: "10.1016/j.ipm.2024.103891",
     similarity: 0.91,
+    pesquisadorId: "ana-l-cardoso",
     abstract:
       "Estudo de caso sobre busca híbrida em currículos da Plataforma Lattes, comparando estratégias densas, esparsas e de reordenação cruzada em consultas formuladas por gestores de pós-graduação.",
     highlights: ["busca híbrida", "Lattes", "reordenação"],
@@ -313,9 +315,10 @@ export const sampleResults = [
     qualis: "A1",
     doi: "10.1007/s11192-023-04711-9",
     similarity: 0.88,
+    pesquisadorId: "ana-l-cardoso",
     abstract:
-      "Construção de grafos de conhecimento abertos a partir de repositórios institucionais brasileiros, com foco em interoperabilidade entre Lattes, ORCID e DSpace.",
-    highlights: ["knowledge graph", "DSpace", "ORCID"],
+      "Construção de indicadores abertos a partir de registros acadêmicos brasileiros, com foco em interoperabilidade entre bases públicas e relatórios institucionais.",
+    highlights: ["indicadores", "bases públicas", "interoperabilidade"],
   },
   {
     id: "r4",
@@ -326,6 +329,7 @@ export const sampleResults = [
     qualis: "A1",
     doi: "10.1145/3626772.3661045",
     similarity: 0.84,
+    pesquisadorId: "eduardo-pires",
     abstract:
       "Discute estratégias de escalabilidade para recuperação híbrida em corpora científicos, com avaliação em coleções multilíngues.",
     highlights: ["recuperação", "escala", "SIGIR"],
@@ -339,6 +343,7 @@ export const sampleResults = [
     qualis: "A4",
     doi: "10.5753/rbie.2023.21",
     similarity: 0.81,
+    pesquisadorId: "ana-l-cardoso",
     abstract:
       "Comparação entre modelos abertos e proprietários para a tarefa de sumarização extrativa e abstrativa de currículos acadêmicos do CNPq.",
     highlights: ["sumarização", "modelos de linguagem"],
@@ -347,8 +352,8 @@ export const sampleResults = [
 
 export const suggestions = [
   "competências em recuperação de informação no Nordeste",
-  "pesquisadores que atuam com pgvector e Lattes",
+  "pesquisadores e produções em ciência de dados",
   "produção sobre ontologias em ciência da informação",
   "grupos de pesquisa em PLN para o português",
-  "evolução da produção em educação digital 2018–2024",
+  "evolução da produção em educação digital 2018-2024",
 ];

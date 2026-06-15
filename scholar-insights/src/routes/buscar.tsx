@@ -1,35 +1,70 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { PageShell } from "@/components/app-shell";
-import { SearchInput, Tag } from "@/components/ui-kit";
-import { searchProductions, getInstituicoes, type SearchResult } from "@/lib/api";
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
+import { PageShell } from "@/components/app-shell";
+import { SearchInput, Tag } from "@/components/ui-kit";
+import {
+  getCapesFacets,
+  searchCapesProductions,
+  type CapesFacet,
+  type SearchResult,
+} from "@/lib/api";
+
+const cleanParam = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  return value.trim().replace(/^"|"$/g, "");
+}, z.string());
+
 const searchSchema = z.object({
-  q: fallback(z.string(), "").default(""),
-  mode: fallback(z.enum(["hybrid", "fulltext", "semantic"]), "hybrid").default("hybrid"),
+  q: fallback(cleanParam, "").default(""),
+  year: fallback(cleanParam, "").default(""),
+  institution: fallback(cleanParam, "").default(""),
+  largeArea: fallback(cleanParam, "").default(""),
+  area: fallback(cleanParam, "").default(""),
+  subtype: fallback(cleanParam, "").default(""),
+  page: fallback(z.coerce.number().int().nonnegative(), 0).default(0),
 });
+
+type SearchParams = z.infer<typeof searchSchema>;
 
 export const Route = createFileRoute("/buscar")({
   staleTime: 0,
   shouldReload: true,
   validateSearch: zodValidator(searchSchema),
-  loaderDeps: ({ search: { q, mode } }) => ({ q, mode }),
+  loaderDeps: ({ search }) => search,
   loader: async ({ deps }) => {
     try {
-      const [results, institutions] = await Promise.all([
-        deps.q ? searchProductions(deps.q, deps.mode) : Promise.resolve([] as SearchResult[]),
-        getInstituicoes(),
+      const filters = {
+        year: deps.year,
+        institution: deps.institution,
+        largeArea: deps.largeArea,
+        area: deps.area,
+        subtype: deps.subtype,
+      };
+      const [response, facets] = await Promise.all([
+        searchCapesProductions(deps.q, filters, deps.page, 20),
+        getCapesFacets(),
       ]);
-      return { results, institutions, query: deps.q, mode: deps.mode };
-    } catch {
+      return {
+        results: response.results,
+        facets,
+        query: deps.q,
+        params: deps,
+        page: response.page,
+        hasMore: response.hasMore,
+        error: "",
+      };
+    } catch (error) {
       return {
         results: [] as SearchResult[],
-        institutions: [] as string[],
+        facets: [] as CapesFacet[],
         query: deps.q,
-        mode: deps.mode,
+        params: deps,
+        page: deps.page,
+        hasMore: false,
+        error: error instanceof Error ? error.message : "Falha ao consultar a API CAPES.",
       };
     }
   },
@@ -38,7 +73,7 @@ export const Route = createFileRoute("/buscar")({
       { title: "Resultados da busca — Scientia Discovery" },
       {
         name: "description",
-        content: "Resultados da busca textual e semântica de produções científicas.",
+        content: "Resultados da busca textual em produções científicas da Plataforma Sucupira.",
       },
     ],
   }),
@@ -46,21 +81,36 @@ export const Route = createFileRoute("/buscar")({
 });
 
 function SearchPage() {
-  const { results, institutions, query, mode } = Route.useLoaderData() as {
+  const { results, facets, query, params, page, hasMore, error } = Route.useLoaderData() as {
     results: SearchResult[];
-    institutions: string[];
+    facets: CapesFacet[];
     query: string;
-    mode: "hybrid" | "fulltext" | "semantic";
+    params: SearchParams;
+    page: number;
+    hasMore: boolean;
+    error: string;
   };
-  const { q } = Route.useSearch();
+  const search = Route.useSearch() as SearchParams;
   const navigate = useNavigate({ from: "/buscar" });
   const [sort, setSort] = useState("relevance");
 
-  const areas = [
-    { name: "Ciência da Computação", count: results.length },
-    { name: "Ciência da Informação", count: Math.floor(results.length * 0.6) },
-    { name: "Educação", count: Math.floor(results.length * 0.4) },
-  ].filter((a) => a.count > 0);
+  const sortedResults = useMemo(() => sortResults(results, sort), [results, sort]);
+  const activeFilters = [
+    ["year", "ano"],
+    ["institution", "instituição"],
+    ["largeArea", "grande área"],
+    ["area", "área"],
+    ["subtype", "subtipo"],
+  ]
+    .map(([key, label]) => ({ key, label, value: params[key as keyof SearchParams] }))
+    .filter((item) => item.value);
+
+  function updateSearch(next: Partial<SearchParams>) {
+    navigate({
+      search: (prev) => ({ ...prev, ...next, page: next.page ?? 0 }),
+      replace: true,
+    });
+  }
 
   return (
     <PageShell>
@@ -68,33 +118,13 @@ function SearchPage() {
         <div className="mx-auto max-w-[1280px] px-6 py-8">
           <Breadcrumbs items={[{ to: "/", label: "Início" }, { label: "Resultados" }]} />
           <div className="mt-5">
-            <SearchInput defaultValue={q} />
+            <SearchInput defaultValue={search.q} />
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[12px] text-muted-foreground">Modo</span>
-              <div className="inline-flex overflow-hidden rounded-sm border">
-                {(["hybrid", "fulltext", "semantic"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() =>
-                      navigate({
-                        search: (prev) => ({ ...prev, mode: m }),
-                        replace: true,
-                      })
-                    }
-                    className={`px-3 py-1.5 text-[12.5px] ${
-                      mode === m
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-surface text-foreground/80 hover:bg-muted"
-                    }`}
-                  >
-                    {m === "hybrid" ? "Híbrido" : m === "fulltext" ? "Full-text" : "Semântico"}
-                  </button>
-                ))}
-              </div>
-              <span className="text-[12.5px] text-muted-foreground">
-                {results.length} resultados{q ? ` — para "${q}"` : ""}
+            <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
+              <Tag tone="scholar">CAPES Sucupira</Tag>
+              <span>
+                {results.length} resultados{query ? ` para "${query}"` : ""}
               </span>
             </div>
             <label className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
@@ -106,71 +136,93 @@ function SearchPage() {
               >
                 <option value="relevance">Relevância</option>
                 <option value="recent">Mais recentes</option>
-                <option value="qualis">Qualis</option>
+                <option value="title">Título</option>
               </select>
             </label>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1280px] grid-cols-1 gap-10 px-6 py-10 lg:grid-cols-[260px_1fr_280px]">
-        {/* Filters */}
-        <aside className="space-y-6">
-          <FilterGroup
-            title="Área de conhecimento"
-            items={areas.map((a) => ({ label: a.name, count: a.count }))}
+      <section className="mx-auto grid max-w-[1280px] grid-cols-1 gap-10 px-6 py-10 lg:grid-cols-[280px_1fr_280px]">
+        <aside className="space-y-4">
+          <FacetSelect
+            label="Ano"
+            value={params.year}
+            facet={findFacet(facets, "year")}
+            onChange={(value) => updateSearch({ year: value })}
           />
-          <FilterGroup
-            title="Instituição"
-            items={institutions.slice(0, 6).map((i) => ({ label: i, count: 0 }))}
+          <FacetSelect
+            label="Instituição"
+            value={params.institution}
+            facet={findFacet(facets, "institution")}
+            onChange={(value) => updateSearch({ institution: value })}
           />
-          <YearRange />
+          <FacetSelect
+            label="Grande área"
+            value={params.largeArea}
+            facet={findFacet(facets, "largeArea")}
+            onChange={(value) => updateSearch({ largeArea: value })}
+          />
+          <FacetSelect
+            label="Área de conhecimento"
+            value={params.area}
+            facet={findFacet(facets, "area")}
+            onChange={(value) => updateSearch({ area: value })}
+          />
+          <FacetSelect
+            label="Subtipo"
+            value={params.subtype}
+            facet={findFacet(facets, "subtype")}
+            onChange={(value) => updateSearch({ subtype: value })}
+          />
         </aside>
 
-        {/* Results */}
         <div>
-          {query && (
+          {error && (
+            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">
+              {error}
+            </div>
+          )}
+
+          {(query || activeFilters.length > 0) && (
             <div className="mb-3 flex flex-wrap gap-2">
-              <Chip label={`busca: ${query}`} />
-              <button className="text-[12px] text-muted-foreground underline-offset-4 hover:underline">
+              {query && <Chip label={`busca: ${query}`} />}
+              {activeFilters.map((filter) => (
+                <Chip key={filter.key} label={`${filter.label}: ${filter.value}`} />
+              ))}
+              <button
+                onClick={() =>
+                  updateSearch({
+                    q: "",
+                    year: "",
+                    institution: "",
+                    largeArea: "",
+                    area: "",
+                    subtype: "",
+                  })
+                }
+                className="text-[12px] text-muted-foreground underline-offset-4 hover:underline"
+              >
                 limpar filtros
               </button>
             </div>
           )}
 
           <ul className="divide-y hairline border-y hairline">
-            {results.length > 0 ? (
-              results.map((r) => (
+            {sortedResults.length > 0 ? (
+              sortedResults.map((r) => (
                 <li key={r.id} className="py-6">
-                  <div className="flex items-center gap-2 text-[11.5px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 text-[11.5px] uppercase tracking-[0.12em] text-muted-foreground">
                     <span>{r.venue}</span>
                     <span>·</span>
                     <span>{r.year}</span>
                     {r.qualis && <Tag tone="scholar">Qualis {r.qualis}</Tag>}
                   </div>
-                  <Link
-                    to="/"
-                    className="mt-1 block font-serif text-[20px] leading-snug tracking-tight text-foreground hover:underline"
-                  >
+                  <div className="mt-1 block font-serif text-[20px] leading-snug tracking-tight text-foreground">
                     {highlight(r.title, query)}
-                  </Link>
+                  </div>
                   <div className="mt-1.5 text-[13px] text-foreground/80">
-                    {r.authors.map((a, i) => (
-                      <span key={a}>
-                        {r.pesquisadorId ? (
-                          <Link
-                            to="/pesquisadores/$id"
-                            params={{ id: r.pesquisadorId }}
-                            className="underline-offset-4 hover:underline"
-                          >
-                            {a}
-                          </Link>
-                        ) : (
-                          <span>{a}</span>
-                        )}
-                        {i < r.authors.length - 1 ? ", " : ""}
-                      </span>
-                    ))}
+                    {r.authors.join(", ")}
                   </div>
                   <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed text-muted-foreground">
                     {highlight(r.abstract || "", query)}
@@ -182,51 +234,53 @@ function SearchPage() {
                       </Tag>
                     ))}
                   </div>
-                  <div className="mt-3 flex gap-4 text-[12.5px] text-foreground/80">
-                    {r.doi && <span className="underline-offset-4">DOI: {r.doi}</span>}
-                    <a className="underline-offset-4 hover:underline" href="#">
-                      Citar (BibTeX)
-                    </a>
-                  </div>
                 </li>
               ))
             ) : (
               <li className="py-12 text-center text-[14px] text-muted-foreground">
-                {query
+                {query || activeFilters.length > 0
                   ? "Nenhum resultado encontrado para esta busca."
-                  : "Faça uma busca para encontrar produções."}
+                  : "Faça uma busca ou selecione filtros para encontrar produções na CAPES."}
               </li>
             )}
           </ul>
+
+          <div className="mt-6 flex items-center justify-between text-[12.5px] text-muted-foreground">
+            <button
+              disabled={page <= 0}
+              onClick={() => updateSearch({ page: Math.max(page - 1, 0) })}
+              className="rounded-sm border bg-surface px-3 py-1.5 text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <span>Página {page + 1}</span>
+            <button
+              disabled={!hasMore}
+              onClick={() => updateSearch({ page: page + 1 })}
+              className="rounded-sm border bg-surface px-3 py-1.5 text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
         </div>
 
-        {/* Right rail */}
         <aside className="space-y-6">
-          {query && (
-            <div className="rounded-md border bg-surface p-5">
-              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                Síntese da consulta
-              </div>
-              <p className="mt-3 text-[13px] leading-relaxed text-foreground/85">
-                {results.length > 0
-                  ? `Encontrados ${results.length} resultados para "${query}".`
-                  : "Nenhum resultado encontrado."}
-              </p>
-              <Link
-                to="/assistente"
-                className="mt-4 inline-flex items-center gap-2 text-[12.5px] text-foreground underline-offset-4 hover:underline"
-              >
-                Aprofundar com o assistente →
-              </Link>
+          <div className="rounded-md border bg-surface p-5">
+            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Fonte dos dados
             </div>
-          )}
+            <p className="mt-3 text-[13px] leading-relaxed text-foreground/85">
+              Esta busca consulta a API pública da Plataforma Sucupira/CAPES. Perfis completos de
+              pesquisadores continuam vindo da base local Lattes.
+            </p>
+          </div>
 
           <div className="rounded-md border bg-surface p-5">
             <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Termos relacionados
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {["recuperação semântica", "BM25", "currículos Lattes", "embeddings densos"].map(
+              {["produção acadêmica", "Sucupira", "programas CAPES", "teses", "dissertações"].map(
                 (t) => (
                   <Tag key={t}>{t}</Tag>
                 ),
@@ -239,76 +293,57 @@ function SearchPage() {
   );
 }
 
-function FilterGroup({
-  title,
-  items,
+function findFacet(facets: CapesFacet[], id: string): CapesFacet | undefined {
+  return facets.find((facet) => facet.id === id);
+}
+
+function FacetSelect({
+  label,
+  value,
+  facet,
+  onChange,
 }: {
-  title: string;
-  items: { label: string; count: number }[];
+  label: string;
+  value: string;
+  facet?: CapesFacet;
+  onChange: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(true);
   return (
-    <div className="border-b hairline pb-4">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between text-left"
+    <label className="block border-b hairline pb-4">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-3 w-full rounded-sm border bg-surface px-2 py-2 text-[12.5px] text-foreground"
       >
-        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          {title}
-        </span>
-        <span className="font-mono text-[11px] text-muted-foreground">{open ? "−" : "+"}</span>
-      </button>
-      {open && (
-        <ul className="mt-3 space-y-1.5">
-          {items.map((i) => (
-            <li key={i.label}>
-              <label className="flex items-center justify-between gap-2 text-[13px] text-foreground/85">
-                <span className="flex items-center gap-2">
-                  <input type="checkbox" className="h-3.5 w-3.5 accent-primary" />
-                  {i.label}
-                </span>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {i.count.toLocaleString("pt-BR")}
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+        <option value="">Todos</option>
+        {(facet?.values ?? []).map((item) => (
+          <option key={`${facet?.id}-${item.key}`} value={item.key}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
-function YearRange() {
-  return (
-    <div className="border-b hairline pb-4">
-      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        Ano
-      </div>
-      <div className="mt-3 flex items-center gap-2 text-[12.5px]">
-        <input
-          defaultValue=""
-          className="w-full rounded-sm border bg-surface px-2 py-1 font-mono"
-          placeholder="De"
-        />
-        <span className="text-muted-foreground">—</span>
-        <input
-          defaultValue=""
-          className="w-full rounded-sm border bg-surface px-2 py-1 font-mono"
-          placeholder="Até"
-        />
-      </div>
-    </div>
-  );
+function sortResults(results: SearchResult[], sort: string): SearchResult[] {
+  const copy = [...results];
+  if (sort === "recent") {
+    return copy.sort((a, b) => b.year - a.year || a.title.localeCompare(b.title));
+  }
+  if (sort === "title") {
+    return copy.sort((a, b) => a.title.localeCompare(b.title));
+  }
+  return copy.sort((a, b) => b.similarity - a.similarity || b.year - a.year);
 }
 
 function Chip({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-sm border bg-surface px-2 py-1 text-[12px] text-foreground/85">
       {label}
-      <button className="text-muted-foreground hover:text-foreground" aria-label="remover">
-        ×
-      </button>
     </span>
   );
 }
@@ -318,13 +353,13 @@ function highlight(text: string, q: string) {
   try {
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const parts = text.split(new RegExp(`(${escaped})`, "ig"));
-    return parts.map((p, i) =>
-      p.toLowerCase() === q.toLowerCase() ? (
-        <mark key={i} className="rounded-[2px] bg-scholar/15 px-0.5 text-foreground">
-          {p}
+    return parts.map((part, index) =>
+      part.toLowerCase() === q.toLowerCase() ? (
+        <mark key={index} className="rounded-[2px] bg-scholar/15 px-0.5 text-foreground">
+          {part}
         </mark>
       ) : (
-        <span key={i}>{p}</span>
+        <span key={index}>{part}</span>
       ),
     );
   } catch {
@@ -335,16 +370,16 @@ function highlight(text: string, q: string) {
 export function Breadcrumbs({ items }: { items: { to?: string; label: string }[] }) {
   return (
     <ol className="flex items-center gap-2 text-[12px] text-muted-foreground">
-      {items.map((it, i) => (
-        <li key={i} className="flex items-center gap-2">
-          {it.to ? (
-            <Link to={it.to} className="hover:text-foreground">
-              {it.label}
+      {items.map((item, index) => (
+        <li key={index} className="flex items-center gap-2">
+          {item.to ? (
+            <Link to={item.to} className="hover:text-foreground">
+              {item.label}
             </Link>
           ) : (
-            <span className="text-foreground/85">{it.label}</span>
+            <span className="text-foreground/85">{item.label}</span>
           )}
-          {i < items.length - 1 && <span>/</span>}
+          {index < items.length - 1 && <span>/</span>}
         </li>
       ))}
     </ol>

@@ -1,8 +1,8 @@
-fastapi
-uvicorn[standard]
-python-multipart
-psycopg2-binary
-pandas
-openpyxl
-lxml
-python-dotenv
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+python-multipart>=0.0.9,<1.0
+psycopg2-binary>=2.9,<3.0
+pandas>=2.2,<3.0
+openpyxl>=3.1,<4.0
+lxml>=5.0,<6.0
+python-dotenv>=1.0,<2.0
